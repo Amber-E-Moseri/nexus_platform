@@ -1,0 +1,249 @@
+import { useState } from 'react'
+import Badge from '../../../components/ui/Badge'
+import SprintProgressBar from './SprintProgressBar'
+import { shouldAutoStartSprint } from '../lib/sprints'
+
+const STATUS_LABELS = {
+  planning: 'Planning',
+  active: 'Active',
+  completed: 'Completed',
+  review: 'In Review',
+  archived: 'Archived',
+}
+
+const STATUS_COLORS = {
+  planning: '#D4B5F4',
+  active: '#3B82F6',
+  completed: '#10B981',
+  review: '#F59E0B',
+  archived: '#6B7280',
+}
+
+function calculateSprintHealth(sprint, progress) {
+  // Only calculate health for active sprints with defined dates
+  if (sprint.status !== 'active' || !sprint.start_date || !sprint.end_date) {
+    return null
+  }
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const startDate = new Date(sprint.start_date)
+  startDate.setHours(0, 0, 0, 0)
+  const endDate = new Date(sprint.end_date)
+  endDate.setHours(0, 0, 0, 0)
+
+  if (today < startDate) return null // Sprint hasn't started
+
+  const totalDays = Math.max(1, (endDate - startDate) / (1000 * 60 * 60 * 24))
+  const elapsedDays = Math.max(0, (today - startDate) / (1000 * 60 * 60 * 24))
+  const expectedProgress = Math.round((elapsedDays / totalDays) * 100)
+
+  // If actual progress is within 10% of expected, consider it "On track"
+  if (progress >= expectedProgress - 10) {
+    return { status: 'On track', color: '#059669' } // green
+  } else {
+    return { status: 'At risk', color: '#D97706' } // orange
+  }
+}
+
+const ACCESS_REQUEST_LABELS = {
+  pending: 'Request pending',
+  rejected: 'Request denied — try again',
+}
+
+export default function SprintCard({
+  sprint,
+  onClick,
+  onDuplicate,
+  onRestore,
+  onDelete,
+  hasAccess = true,
+  accessRequestStatus = null,
+  onRequestAccess,
+}) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const isArchived = sprint.status === 'archived'
+  const taskCount = sprint.task_count || 0
+  const completedCount = sprint.completed_count || 0
+  const progress = taskCount > 0 ? Math.round((completedCount / taskCount) * 100) : 0
+  const health = calculateSprintHealth(sprint, progress)
+
+  const dateRange = sprint.start_date && sprint.end_date
+    ? `${new Date(sprint.start_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })} — ${new Date(sprint.end_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' })}`
+    : sprint.start_date
+      ? `Started ${new Date(sprint.start_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}`
+      : 'No dates set'
+
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        background: isArchived ? '#F9F7F3' : '#FFFFFF',
+        border: `2px solid ${STATUS_COLORS[sprint.status] || '#E9E4D8'}`,
+        borderRadius: 16,
+        padding: '20px',
+        cursor: hasAccess ? 'pointer' : 'default',
+        opacity: isArchived ? 0.72 : hasAccess ? 1 : 0.85,
+        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        boxShadow: isArchived ? 'none' : '0 2px 8px rgba(28,22,16,0.08)',
+      }}
+      onMouseEnter={(e) => {
+        if (!isArchived && hasAccess) {
+          e.currentTarget.style.boxShadow = '0 12px 32px rgba(28,22,16,0.15)'
+          e.currentTarget.style.transform = 'translateY(-4px)'
+          e.currentTarget.style.borderColor = 'var(--accent)'
+        }
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.boxShadow = '0 2px 8px rgba(28,22,16,0.08)'
+        e.currentTarget.style.transform = 'translateY(0)'
+        e.currentTarget.style.borderColor = STATUS_COLORS[sprint.status] || '#E9E4D8'
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {!hasAccess ? '🔒 ' : isArchived ? '📦 ' : shouldAutoStartSprint(sprint) ? '⚡ ' : ''}{sprint.name}
+          </div>
+          {(sprint.department_name || sprint.category) && (
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>
+              {[sprint.department_name, sprint.category === 'group' ? 'Group' : sprint.category === 'regional' ? 'Regional' : null]
+                .filter(Boolean)
+                .join(' · ')}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <Badge tone={sprint.status}>{STATUS_LABELS[sprint.status] ?? sprint.status}</Badge>
+          {shouldAutoStartSprint(sprint) && <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>Ready to start</div>}
+        </div>
+      </div>
+
+      {taskCount > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <SprintProgressBar tasksCount={{ done: completedCount, total: taskCount }} compact={true} />
+        </div>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid #E9E4D8' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>📅 {dateRange}</span>
+          {taskCount > 0 && (
+            <>
+              <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>
+                {completedCount}/{taskCount}
+              </span>
+              <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600 }}>
+                {progress}% complete
+              </span>
+            </>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {!hasAccess ? (
+            accessRequestStatus === 'pending' || accessRequestStatus === 'rejected' ? (
+              <button
+                type="button"
+                disabled={accessRequestStatus === 'pending'}
+                onClick={(e) => { e.stopPropagation(); onRequestAccess?.() }}
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: '5px 10px',
+                  borderRadius: 6,
+                  border: '1px solid var(--border-1)',
+                  background: accessRequestStatus === 'pending' ? 'var(--surface-sub)' : 'white',
+                  color: accessRequestStatus === 'pending' ? 'var(--text-tertiary)' : 'var(--coral)',
+                  cursor: accessRequestStatus === 'pending' ? 'default' : 'pointer',
+                }}
+              >
+                {ACCESS_REQUEST_LABELS[accessRequestStatus]}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onRequestAccess?.() }}
+                style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: '5px 10px',
+                  borderRadius: 6,
+                  border: 'none',
+                  background: 'var(--purple-700)',
+                  color: 'white',
+                  cursor: 'pointer',
+                }}
+              >
+                Request access
+              </button>
+            )
+          ) : (
+            <>
+              {health && (
+                <span style={{ fontSize: 12, fontWeight: 500, padding: '4px 10px', borderRadius: 6, background: health.color, color: 'white' }}>
+                  {health.status}
+                </span>
+              )}
+              <div style={{ position: 'relative' }}>
+              {onDuplicate || onRestore || onDelete ? (
+            <>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setMenuOpen(!menuOpen) }}
+                style={{ width: 24, height: 24, borderRadius: 6, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                ⋯
+              </button>
+              {menuOpen ? (
+                <>
+                  <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={(e) => { e.stopPropagation(); setMenuOpen(false) }} />
+                  <div style={{ position: 'absolute', top: 28, right: 0, zIndex: 20, minWidth: 150, background: 'white', border: '1px solid var(--border)', borderRadius: 10, boxShadow: 'var(--shadow-lg)', overflow: 'hidden' }}>
+                    {onDuplicate ? (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onDuplicate(sprint.id); setMenuOpen(false) }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 12.5, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', borderBottom: '1px solid var(--border)' }}
+                      >
+                        Duplicate
+                      </button>
+                    ) : null}
+                    {!isArchived && onRestore ? (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onRestore(sprint.id); setMenuOpen(false) }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 12.5, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', borderBottom: '1px solid var(--border)' }}
+                      >
+                        Restore
+                      </button>
+                    ) : null}
+                    {isArchived && onRestore ? (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onRestore(sprint.id); setMenuOpen(false) }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 12.5, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', borderBottom: '1px solid var(--border)' }}
+                      >
+                        Restore
+                      </button>
+                    ) : null}
+                    {onDelete ? (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); onDelete(sprint.id, sprint.name); setMenuOpen(false) }}
+                        style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px', fontSize: 12.5, background: 'transparent', border: 'none', cursor: 'pointer', color: '#C94830' }}
+                      >
+                        Delete
+                      </button>
+                    ) : null}
+                  </div>
+                </>
+              ) : null}
+            </>
+          ) : null}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

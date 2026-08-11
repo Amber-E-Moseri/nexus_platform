@@ -1,0 +1,34 @@
+# Supabase Configuration
+
+[functions."task-overdue-trigger"]
+verify_jwt = false
+
+[functions."feature-announcement-email"]
+verify_jwt = false
+
+[functions."weekly-recap-email"]
+verify_jwt = false
+
+[functions."reengagement-email"]
+verify_jwt = false
+
+[functions."calendar-task-feed"]
+verify_jwt = false
+
+[functions."generate-recurring-meetings"]
+verify_jwt = false
+
+[functions."archive-completed-tasks"]
+verify_jwt = false
+
+[functions."test-reports-api"]
+verify_jwt = false
+
+[functions."growth-reports-sync"]
+verify_jwt = false
+
+[functions."service-attendees"]
+verify_jwt = false
+
+[functions."weekly-growth-report"]
+verify_jwt = false

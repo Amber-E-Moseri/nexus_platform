@@ -1,0 +1,1 @@
+-- No seed. Event configs are created via the Settings tab in the UI.

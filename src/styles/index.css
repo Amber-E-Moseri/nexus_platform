@@ -1,0 +1,553 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300..800;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+:root {
+  /* ── Brand ─────────────────────────────────────────── */
+  /* Core brand accents for buttons, active states, highlights, logos, and shared UI emphasis across the shell and feature modules */
+  --accent:             #4C2A92;   /* primary navy purple */
+  --accent-hover:       #3A1F75;
+  --accent-light:       #EDE8F8;   /* ghost / tinted hover */
+  --accent-dark:        #3A1F75;
+  --accent-muted:       rgba(76,42,146,0.09);
+  --accent-bar:         #6B4BBE;   /* light variant for bars */
+
+  --amber:              #E8A020;   /* warm gold — CTAs, logo */
+  --amber-hover:        #C47E0A;
+  --amber-light:        #FDF0D5;
+
+  --coral:              #F06449;   /* attention / counts */
+  --coral-dark:         #C94830;
+  --coral-light:        #FEF0ED;
+
+  --sage:               #2D8653;   /* success / healthy */
+  --sage-light:         #EBF7F1;
+  --sage-border:        #A7D9BE;
+
+  /* kept for backwards-compat in rail references */
+  --workspace-rail:     #4C2A92;
+  --workspace-rail-dark:#3A1F75;
+
+  /* ── Surfaces ───────────────────────────────────────── */
+  /* Base backgrounds for pages, cards, panels, tables, and top-level workspace shells including Dashboard, Settings, Spaces, and Meetings */
+  --surface:            #FFFFFF;
+  --surface-secondary:  #F9F7F3;   /* table headers, sub-tiles */
+  --surface-hover:      #F2EEE6;   /* very faint row hover */
+  --surface-tertiary:   #F2EEE6;
+  --workspace-panel:    #FBF8F2;   /* sidebar */
+  --topbar-bg:          #FFFFFF;
+
+  /* ── Borders & elevation ───────────────────────────── */
+  /* Border, divider, and shadow tokens used by cards, modals, top bars, sidebars, tables, and interactive containers throughout the app */
+  --border:             #E9E4D8;
+  --border-strong:      rgba(28,22,16,.12);
+  --border-light:       #F2EEE6;   /* internal dividers */
+  --sidebar-border:     #EDE8DC;
+  --topbar-border:      #E9E4D8;
+  --card-shadow:        0 1px 3px rgba(28,22,16,.05);
+  --shadow:             0 2px 10px rgba(28,22,16,.07);
+  --shadow-lg:          0 8px 28px rgba(28,22,16,.10);
+
+  /* ── Sidebar ────────────────────────────────────────── */
+  /* Navigation-specific colors and sizing for the left application sidebar, section labels, hover states, and fixed shell layout width */
+  --sidebar-bg:         #FBF8F2;
+  --sidebar-text:       #7A6F5E;
+  --sidebar-active:     #4C2A92;
+  --sidebar-hover:      #F2EEE6;
+  --sidebar-section:    #EDE8F8;
+  --sidebar-w:          218px;
+
+  /* ── Text ───────────────────────────────────────────── */
+  /* Shared typography colors for headings, body copy, helper text, muted labels, placeholders, badges, and metadata in all modules */
+  --text-primary:       #1C1610;   /* warm near-black */
+  --text-secondary:     #7A6F5E;   /* medium warm */
+  --text-tertiary:      #B0A696;   /* light warm */
+  --text-placeholder:   #C9C0B0;
+
+  /* ── Status ─────────────────────────────────────────── */
+  /* Semantic task and workflow state colors consumed by badges, kanban cards, sprint views, invitations, and lifecycle indicators */
+  --status-backlog-bg:  #F9F7F3;   --status-backlog-text:  #7A6F5E;
+  --status-progress-bg: #EFF6FF;   --status-progress-text: #1E40AF;
+  --status-review-bg:   #FDF0D5;   --status-review-text:   #C47E0A;
+  --status-done-bg:     #EBF7F1;   --status-done-text:     #2D8653;
+  --status-blocked-bg:  #FEF0ED;   --status-blocked-text:  #C94830;
+
+  /* ── Priority ───────────────────────────────────────── */
+  /* Priority badge colors used on task cards, task detail forms, filters, and other planning surfaces that represent urgency */
+  --prio-urgent-bg:  #FEF0ED;   --prio-urgent-text:  #C94830;
+  --prio-high-bg:    #FDF0D5;   --prio-high-text:    #C47E0A;
+  --prio-medium-bg:  #EFF6FF;   --prio-medium-text:  #1E40AF;
+  --prio-low-bg:     #F9F7F3;   --prio-low-text:     #7A6F5E;
+
+  /* ── Dept colours ───────────────────────────────────── */
+  /* Department identity colors used in department chips, space glyphs, calendars, summaries, and cross-module visual grouping */
+  --dept-admin:   #4C2A92;
+  --dept-pfcc:    #2D8653;
+  --dept-media:   #C47E0A;
+  --dept-ors:     #C94830;
+  --dept-pastors: #6B4BBE;
+
+  /* ── Info semantic ──────────────────────────────────── */
+  --info:            #1E40AF;
+  --info-bg:         #EFF6FF;
+  --info-bd:         #BFDBFE;
+
+  /* ── FS design-system token aliases ────────────────── */
+  /* These let any FS-kit code drop straight into the app */
+  --fs-navy:         #4C2A92;   --fs-navy-d:      #3A1F75;   --fs-navy-l:    #6B4BBE;   --fs-navy-ghost: #EDE8F8;
+  --fs-amber:        #E8A020;   --fs-amber-d:     #C47E0A;   --fs-amber-l:   #FDF0D5;
+  --fs-coral:        #F06449;   --fs-coral-d:     #C94830;   --fs-coral-l:   #FEF0ED;
+  --fs-sage:         #2D8653;   --fs-sage-l:      #EBF7F1;   --fs-sage-bd:   #A7D9BE;
+  --fs-bg:           #F7F5F0;   --fs-sidebar-bg:  #FBF8F2;   --fs-sidebar-bd:#EDE8DC;
+  --fs-surface:      #FFFFFF;   --fs-surface-alt: #F9F7F3;
+  --fs-border:       #E9E4D8;   --fs-border-l:    #F2EEE6;
+  --fs-text:         #1C1610;   --fs-muted:       #7A6F5E;   --fs-xmuted:    #B0A696;
+  --fs-success:      #2D8653;   --fs-success-bg:  #EBF7F1;   --fs-success-bd:#A7D9BE;
+  --fs-danger:       #C94830;   --fs-danger-bg:   #FEF0ED;   --fs-danger-bd: #F9C4B8;
+  --fs-warn:         #C47E0A;   --fs-warn-bg:     #FDF0D5;   --fs-warn-bd:   #F5CE7A;
+  --fs-info:         #1E40AF;   --fs-info-bg:     #EFF6FF;   --fs-info-bd:   #BFDBFE;
+  --fs-sh-xs:        0 1px 3px rgba(28,22,16,.05);
+  --fs-sh:           0 2px 10px rgba(28,22,16,.07);
+  --fs-sh-lg:        0 8px 28px rgba(28,22,16,.10);
+  --fs-sidebar-w:    218px;   --fs-topbar-h: 52px;
+  --fs-font-body:    'DM Sans', system-ui, sans-serif;
+  --fs-font-mono:    'DM Mono', ui-monospace, monospace;
+  --fs-r-xs: 4px;   --fs-r-sm: 6px;   --fs-r: 10px;   --fs-r-lg: 14px;   --fs-r-xl: 20px;   --fs-r-pill: 999px;
+  --fs-fs-kpi: 27px;   --fs-fs-page: 21px;   --fs-fs-h2: 14.5px;
+  --fs-fs-body: 13.5px;   --fs-fs-meta: 12px;   --fs-fs-micro: 10.5px;   --fs-fs-mono: 11.5px;
+
+  /* ── Type ────────────────────────────────────────────────────── */
+  font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-primary);
+  background: #F7F5F0;
+}
+
+:root[data-nexus-theme='purple'] {
+  --accent: #6C38C5;
+  --accent-hover: #51249E;
+  --accent-light: #F0EAFE;
+  --accent-dark: #51249E;
+  --accent-muted: rgba(108, 56, 197, .1);
+  --accent-bar: #8B61D7;
+  --workspace-rail: #6C38C5;
+  --workspace-rail-dark: #51249E;
+  --sidebar-active: #6C38C5;
+  --sidebar-section: #F0EAFE;
+  --fs-navy: #6C38C5;
+  --fs-navy-d: #51249E;
+  --fs-navy-l: #8B61D7;
+  --fs-navy-ghost: #F0EAFE;
+  --purple-700: #6C38C5;
+  --purple-600: #7D4FDA;
+  --purple-500: #9A78E6;
+  --purple-tint: #F0EAFE;
+}
+
+:root[data-nexus-theme='green'] {
+  --accent: #147C68;
+  --accent-hover: #0D5D4F;
+  --accent-light: #E6F4F0;
+  --accent-dark: #0D5D4F;
+  --accent-muted: rgba(20, 124, 104, .1);
+  --accent-bar: #359A85;
+  --workspace-rail: #147C68;
+  --workspace-rail-dark: #0D5D4F;
+  --sidebar-active: #147C68;
+  --sidebar-section: #E6F4F0;
+  --fs-navy: #147C68;
+  --fs-navy-d: #0D5D4F;
+  --fs-navy-l: #359A85;
+  --fs-navy-ghost: #E6F4F0;
+  --purple-700: #147C68;
+  --purple-600: #238C76;
+  --purple-500: #49A992;
+  --purple-tint: #E6F4F0;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { min-height: 100%; }
+body { margin: 0; background: #F7F5F0; color: var(--text-primary); overflow-x: hidden; }
+a { color: inherit; text-decoration: none; }
+button, input, select, textarea { font: inherit; }
+
+/* ── Focus ring ──────────────────────────────────────────────── */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-muted);
+  border-color: var(--accent) !important;
+}
+
+/* ── Monospace utility ───────────────────────────────────────── */
+.fs-mono {
+  font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+}
+
+/* ── Button primitives ───────────────────────────────────────── */
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border: 1px solid var(--accent);
+  transition: background .13s, border-color .13s;
+}
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+.btn-amber {
+  background: var(--amber);
+  color: #fff;
+  border: 1px solid var(--amber);
+  transition: background .13s, border-color .13s;
+}
+.btn-amber:hover { background: var(--amber-hover); border-color: var(--amber-hover); }
+
+.btn-ghost {
+  background: var(--surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  transition: background .13s, border-color .13s, color .13s;
+}
+.btn-ghost:hover {
+  background: var(--surface-secondary);
+  border-color: var(--accent-bar);
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
+
+/* ── Sidebar enter animation ─────────────────────────────────── */
+.transition-sidebar { transition: width 200ms ease; }
+
+/* ── Fade-up entry animation ─────────────────────────────────── */
+@keyframes fs-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fs-fade-up { animation: fs-up .4s ease both; }
+
+/* ── Base typography (FS spec) ───────────────────────────────── */
+h1, h2, h3, h4 {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  color: var(--text-primary);
+  line-height: 1.2;
+  letter-spacing: -.005em;
+}
+h1 { font-size: 21px; font-weight: 800; }
+h2 { font-size: 17px; font-weight: 700; }
+h3 { font-size: 14.5px; font-weight: 700; }
+h4 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--text-secondary); }
+code, kbd { font-family: 'DM Mono', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+
+/* ── Status dot indicators ───────────────────────────────────── */
+.dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: middle; }
+.dot-g { background: var(--sage); }
+.dot-a { background: var(--amber); }
+.dot-r { background: var(--coral); }
+
+/* ── Badge / status pill ─────────────────────────────────────── */
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
+  white-space: nowrap; border: 1px solid transparent;
+}
+.b-ok   { background: var(--sage-light);        color: var(--sage);          border-color: var(--sage-border); }
+.b-bad  { background: var(--coral-light);       color: var(--coral-dark);    border-color: #F9C4B8; }
+.b-warn { background: var(--amber-light);       color: var(--amber-hover);   border-color: #F5CE7A; }
+.b-info { background: var(--info-bg);           color: var(--info);          border-color: var(--info-bd); }
+.b-mute { background: var(--surface-secondary); color: var(--text-secondary); border-color: var(--border); }
+
+/* ── Card count chips ────────────────────────────────────────── */
+.cnt-n { background: var(--accent-light); color: var(--accent); }
+.cnt-w { background: var(--amber-light);  color: var(--amber-hover); }
+.cnt-c { background: var(--coral-light);  color: var(--coral-dark); }
+
+/* ── Extended button semantic variants ──────────────────────── */
+.btn-ok {
+  background: var(--sage-light); color: var(--sage);
+  border: 1px solid var(--sage-border);
+  transition: background .13s, border-color .13s;
+}
+.btn-ok:hover:not(:disabled) { filter: brightness(.96); }
+.btn-bad,
+.btn-danger {
+  background: var(--coral-light); color: var(--coral-dark);
+  border: 1px solid #F9C4B8;
+  transition: background .13s, border-color .13s;
+}
+.btn-bad:hover:not(:disabled),
+.btn-danger:hover:not(:disabled) { filter: brightness(.96); }
+.btn-warn {
+  background: var(--amber-light); color: var(--amber-hover);
+  border: 1px solid #F5CE7A;
+  transition: background .13s, border-color .13s;
+}
+.btn-warn:hover:not(:disabled) { filter: brightness(.96); }
+.btn-sm { padding: 5px 10px !important; font-size: 12px !important; }
+.btn-xs { padding: 3px 8px !important;  font-size: 11px !important; }
+:is(.btn-primary, .btn-amber, .btn-ghost, .btn-ok, .btn-bad, .btn-danger, .btn-warn):disabled {
+  opacity: .4; cursor: not-allowed;
+}
+
+/* ── FS table primitive ──────────────────────────────────────── */
+.fs-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.fs-table thead tr { background: var(--surface-secondary); }
+.fs-table th {
+  padding: 8px 14px; text-align: left;
+  font-size: 10.5px; font-weight: 700; color: var(--text-secondary);
+  text-transform: uppercase; letter-spacing: .05em;
+  white-space: nowrap; border-bottom: 1px solid var(--border);
+}
+.fs-table td { padding: 0 14px; height: 38px; border-bottom: 1px solid var(--border-light); vertical-align: middle; }
+.fs-table tbody tr:last-child td { border-bottom: none; }
+.fs-table tbody tr { transition: background .1s; }
+.fs-table tbody tr:hover td { background: var(--surface-secondary); }
+.fs-mono-cell { font-family: 'DM Mono', ui-monospace, monospace; font-size: 11.5px; color: var(--text-secondary); }
+
+/* ── FS tab bar ──────────────────────────────────────────────── */
+.fs-tab-bar { display: flex; gap: 1px; border-bottom: 1px solid var(--border); }
+.fs-tab-btn {
+  padding: 9px 13px; border: none; background: none; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 500; color: var(--text-secondary);
+  border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .13s;
+}
+.fs-tab-btn:hover { color: var(--accent); }
+.fs-tab-btn.active { color: var(--accent); font-weight: 700; border-bottom-color: var(--accent); }
+
+/* ── Filter chip ─────────────────────────────────────────────── */
+.fchip {
+  padding: 5px 10px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border);
+  font-size: 11.5px; font-weight: 600; color: var(--text-secondary);
+  cursor: pointer; transition: all .13s;
+}
+.fchip:hover { border-color: var(--accent-bar); color: var(--accent); }
+.fchip.on { background: var(--accent-light); color: var(--accent); border-color: var(--accent-light); }
+
+/* ── Quick card (FS hover spec: amber border + icon flip) ────── */
+.fs-quick-card {
+  padding: 16px; border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); text-decoration: none; color: var(--text-primary);
+  display: flex; flex-direction: column; gap: 10px;
+  transition: box-shadow .16s, transform .16s, border-color .16s;
+  box-shadow: var(--card-shadow);
+}
+.fs-quick-card:hover {
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
+  border-color: var(--amber);
+}
+.fs-quick-card .qc-icon {
+  width: 34px; height: 34px; border-radius: 8px;
+  background: var(--accent-light); color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; transition: background .16s, color .16s;
+}
+.fs-quick-card:hover .qc-icon { background: var(--accent); color: var(--amber); }
+.qc-name { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.qc-desc { font-size: 11.5px; color: var(--text-secondary); line-height: 1.4; }
+
+/* ── ClickUp UI refresh tokens (experiment/clickup-ui-refresh) ──────────
+   Approved palette for the restyle pass (Calendar, Inbox, Notifications,
+   Spaces). Appended so unrestyled modules keep their original tokens. */
+:root {
+  /* Purple scale */
+  --purple-700:        #4C2A92;   /* anchor — primary buttons, active nav */
+  --purple-600:        #5F3BB8;   /* hover / elevated state */
+  --purple-500:        #7C5CE0;   /* focus rings, links, unread (live) */
+  --purple-tint:       #EDE8F8;   /* light tint */
+
+  /* Surfaces */
+  --bg-app:            #FAFAF8;   /* page canvas (was cream #F4F1EA) */
+  --surface-card:      #FFFFFF;   /* component surfaces */
+  --surface-sub:       #F5F3F0;   /* sub-tile / secondary surface */
+  --surface-hover-warm:#F2EEE6;   /* hover, paired with new canvas */
+
+  /* Borders (cooled to pair with the whiter canvas) */
+  --border-1:          #E7E5DE;   /* primary */
+  --border-2:          #D8D5CC;   /* secondary */
+
+  /* Text */
+  --ink-1:             #1C1610;
+  --ink-2:             #4A4641;
+  --ink-3:             #6D6860;
+
+  /* Semantic accents (base / tint / dark text — AA on their tints) */
+  --accent-blue:   #2563EB;  --accent-blue-tint:   #DBEAFE;  --accent-blue-text:   #1E40AF;
+  --accent-green:  #059669;  --accent-green-tint:  #D1FAE5;  --accent-green-text:  #065F46;
+  --accent-yellow: #D97706;  --accent-yellow-tint: #FEF3C7;  --accent-yellow-text: #92400E;
+  --accent-orange: #F97316;  --accent-orange-tint: #FFEDD5;  --accent-orange-text: #7C2D12;
+  --accent-red:    #DC2626;  --accent-red-tint:    #FEE2E2;  --accent-red-text:    #7F1D1D;
+  --accent-pink:   #EC4899;  --accent-pink-tint:   #FCE7F3;  --accent-pink-text:   #831843;
+  --accent-teal:   #0891B2;  --accent-teal-tint:   #CFFAFE;  --accent-teal-text:   #164E63;
+}
+
+/* ── ClickUp UI refresh: Radix dropdown items (Spaces menus) ──────────── */
+.cu-menu-item { transition: background .12s, color .12s; }
+.cu-menu-item[data-highlighted] { background: var(--purple-tint); color: var(--purple-700); outline: none; }
+.cu-menu-item-danger[data-highlighted] { background: var(--accent-red-tint); color: var(--accent-red-text); }
+
+/* ── BLW-04: Sidebar nav items — CSS classes replace per-render inline styles
+      and JS hover mutations in Sidebar.jsx SidebarItem ─────────────────── */
+.sidebar-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  margin-bottom: 2px;
+  border: none;
+  border-left: 3px solid transparent;
+  text-align: left;
+  font-size: 13px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ink-1, #1C1610);
+  font-weight: 500;
+}
+.sidebar-item:hover:not(.sidebar-item--active) { background: var(--sidebar-hover); }
+.sidebar-item--active {
+  border-left-color: var(--sidebar-active);
+  background: var(--sidebar-section);
+  color: var(--sidebar-active);
+  font-weight: 700;
+}
+.sidebar-item__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-item__badge {
+  background: var(--coral);
+  color: #FFFFFF;
+  font-size: 9.5px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 1px 6px;
+  line-height: 1.3;
+}
+
+/* ── BLW-12: Dashboard enter animations — CSS keyframes replace per-widget
+      Framer Motion springs on initial load (Framer stays for gesture-driven
+      UI like the customize panel) ──────────────────────────────────────── */
+@keyframes dash-enter {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.dash-stagger > * { animation: dash-enter .38s cubic-bezier(.22,.9,.35,1) both; }
+.dash-stagger > *:nth-child(1) { animation-delay: 40ms; }
+.dash-stagger > *:nth-child(2) { animation-delay: 95ms; }
+.dash-stagger > *:nth-child(3) { animation-delay: 150ms; }
+.dash-stagger > *:nth-child(4) { animation-delay: 205ms; }
+.dash-stagger > *:nth-child(5) { animation-delay: 260ms; }
+.dash-stagger > *:nth-child(6) { animation-delay: 315ms; }
+.dash-stagger > *:nth-child(n+7) { animation-delay: 370ms; }
+@media (prefers-reduced-motion: reduce) {
+  .dash-stagger > * { animation: none; }
+}
+.hero-stat-card {
+  transition: translate .15s ease, filter .15s ease, scale .1s ease;
+}
+.hero-stat-card:hover { translate: 0 -2px; }
+.hero-stat-card:active { scale: .99; }
+
+/* Stat card grid — equal height cards, tighter gap on mobile */
+.dash-stat-grid {
+  grid-template-columns: repeat(2, 1fr);
+  align-items: stretch;
+}
+.dash-stat-grid > * { height: 100%; }
+@media (max-width: 380px) {
+  .dash-stat-grid { gap: 8px !important; }
+}
+
+/* ── Retractable sidebar — icon rail. Reuses .sidebar-item so every nav
+      entry (including href-based integration links) collapses uniformly
+      without per-item logic ─────────────────────────────────────────── */
+.sidebar-nav--collapsed .sidebar-item {
+  justify-content: center;
+  gap: 0;
+}
+.sidebar-nav--collapsed .sidebar-item__label,
+.sidebar-nav--collapsed .sidebar-item__badge {
+  display: none;
+}
+
+/* ── RichMinutesEditor: Tiptap / ProseMirror content styles ────────────────
+   Scoped to .rich-editor-content to avoid colliding with global prose styles.
+   Tiptap ships unstyled — this maps its elements to the existing design tokens. */
+.rich-editor-content {
+  padding: 12px 14px;
+  min-height: 140px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary, #1C1610);
+  font-family: inherit;
+  outline: none;
+}
+.rich-editor-content p { margin: 0 0 6px; }
+.rich-editor-content p:last-child { margin-bottom: 0; }
+.rich-editor-content h2 { font-size: 15px; font-weight: 700; margin: 14px 0 6px; color: var(--text-primary, #1C1610); }
+.rich-editor-content h3 { font-size: 13px; font-weight: 700; margin: 10px 0 4px; color: var(--text-primary, #1C1610); }
+.rich-editor-content ul, .rich-editor-content ol { padding-left: 20px; margin: 6px 0; }
+.rich-editor-content li { margin: 2px 0; }
+.rich-editor-content blockquote { border-left: 3px solid var(--border, #E9E4D8); padding-left: 12px; margin: 8px 0; color: var(--text-secondary, #7A6F5E); }
+.rich-editor-content pre { background: var(--surface-secondary, #F9F7F3); border: 1px solid var(--border, #E9E4D8); border-radius: 6px; padding: 10px 12px; font-size: 12px; overflow-x: auto; }
+.rich-editor-content code { background: var(--surface-secondary, #F9F7F3); padding: 1px 4px; border-radius: 3px; font-size: 11.5px; font-family: 'DM Mono', ui-monospace, monospace; }
+.rich-editor-content pre code { background: none; padding: 0; }
+.rich-editor-content hr { border: none; border-top: 1px solid var(--border, #E9E4D8); margin: 12px 0; }
+.rich-editor-content a { color: var(--color-primary, #4C2A92); text-decoration: underline; }
+.rich-editor-content .ProseMirror-selectednode { outline: 2px solid var(--color-primary, #4C2A92); }
+
+/* ── Z-index scale ─────────────────────────────────────────────────────────
+   Named tiers so stacking contexts have a shared vocabulary. Nova's chat
+   widget is the first consumer; other fixed/sticky elements should migrate
+   to these tokens rather than inventing new one-off values.
+   Current ad-hoc values in the codebase (not yet migrated):
+     content dropdowns ~z-8 to z-30, modal overlays z-40, modal content z-50 */
+:root {
+  --z-dropdown:      20;
+  --z-chat-widget:   30;
+  --z-modal-overlay: 40;
+  --z-modal:         50;
+  --z-toast:         60;
+}
+
+/* ── Mobile spacing & touch-target improvements ────────────────────────────
+   Applied at ≤640px: expands padding on cards/list items, enforces 44px
+   minimum touch targets on interactive rows, and adds vertical breathing room
+   between page sections. Desktop layout is unchanged. */
+@media (max-width: 640px) {
+  /* Settings page tab bar — wider tap targets, readable font */
+  [role="tablist"] [role="tab"] {
+    min-height: 44px;
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  /* Increase vertical rhythm between stacked page sections */
+  .space-y-6 > * + * { margin-top: 28px !important; }
+  .space-y-4 > * + * { margin-top: 20px !important; }
+
+  /* Generic card padding bump: any .fs-quick-card or surface card */
+  .fs-quick-card { padding: 18px !important; }
+
+  /* Filter chips — easier to tap */
+  .fchip { padding: 8px 13px !important; font-size: 12px !important; }
+
+  /* Table cells — a touch more vertical room */
+  .fs-table td { padding-top: 8px !important; padding-bottom: 8px !important; }
+
+  /* Badge pills — slightly more padding so text doesn't hug the border */
+  .badge { padding: 3px 10px !important; }
+}

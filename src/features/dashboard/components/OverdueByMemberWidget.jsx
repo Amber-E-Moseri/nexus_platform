@@ -1,0 +1,170 @@
+import { useEffect, useState } from 'react'
+import { supabase } from '../../../lib/supabase'
+import { updateTask } from '../../../features/tasks'
+
+import { groupOverdueByMember } from '../lib/overdue'
+
+function initials(name = '') {
+  return name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('') || '?'
+}
+
+function Avatar({ name }) {
+  return (
+    <div style={{
+      width: 28, height: 28, borderRadius: '50%', background: '#EDE8F8',
+      color: '#4C2A92', fontSize: 11, fontWeight: 700,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+    }}>
+      {initials(name)}
+    </div>
+  )
+}
+
+export default function OverdueByMemberWidget({ role, userId, departmentId, data }) {
+  const [members, setMembers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState(null)
+  const [updating, setUpdating] = useState(null)
+
+  useEffect(() => {
+    let active = true
+
+    // Served by the consolidated get_dashboard_data RPC (BLW-02)
+    if (Array.isArray(data)) {
+      setMembers(groupOverdueByMember(data))
+      setLoading(false)
+      return
+    }
+
+    async function load() {
+      // This rollup is admin/lead/pastor-only by product design (see render
+      // gate below) — skip the fetch entirely for members rather than
+      // pulling department task data into the browser just to discard it.
+      if (role === 'member') {
+        setMembers([])
+        setLoading(false)
+        return
+      }
+      setLoading(true)
+      try {
+        const today = new Date().toISOString().slice(0, 10)
+        let query = supabase
+          .from('tasks')
+          .select('id, title, assignee_id, assignee:users!assignee_id(id, name), due_date, status')
+          .lt('due_date', today)
+          .not('status', 'in', '("done","completed","cancelled")')
+          .not('assignee_id', 'is', null)
+          .eq('is_personal', false)
+          .is('parent_task_id', null)
+
+        if (role === 'dept_lead' && departmentId) {
+          query = query.eq('department_id', departmentId)
+        } else if (role === 'pastor') {
+          const { data: flockRows } = await supabase
+            .from('pastor_members')
+            .select('member_id')
+            .eq('pastor_id', userId)
+          const ids = (flockRows ?? []).map(r => r.member_id)
+          if (ids.length === 0) { if (active) { setMembers([]); setLoading(false) } return }
+          query = query.in('assignee_id', ids)
+        }
+
+        const { data: rows } = await query
+        if (!active) return
+
+        setMembers(groupOverdueByMember(rows ?? []))
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    load()
+    return () => { active = false }
+  }, [role, userId, departmentId, data])
+
+  // Overdue-by-member rollup is admin/lead/pastor-only by product design
+  // (RLS already scopes the underlying tasks query to the member's own
+  // department regardless — this is a UX choice, not a security boundary).
+  if (role === 'member') {
+    return <div style={{ fontSize: 13, color: '#9E9488', padding: '20px 0', textAlign: 'center' }}>Overdue data is for admins only</div>
+  }
+
+  const MAX = 8
+  const visible = members.slice(0, MAX)
+  const extra = members.length - MAX
+
+  if (loading) return <div style={{ fontSize: 12.5, color: '#9E9488', padding: '12px 0' }}>Loading…</div>
+  if (members.length === 0) return (
+    <div style={{ fontSize: 13, color: '#9E9488', padding: '20px 0', textAlign: 'center' }}>No overdue tasks 🎉</div>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {visible.map(member => (
+        <div key={member.id}>
+          <button
+            type="button"
+            onClick={() => setExpanded(expanded === member.id ? null : member.id)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+              background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', textAlign: 'left',
+            }}
+          >
+            <Avatar name={member.name} />
+            <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#2D2A22' }}>{member.name}</span>
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: '1px 8px', borderRadius: 999,
+              background: '#FEF0ED', color: '#C94830',
+            }}>
+              {member.tasks.length}
+            </span>
+          </button>
+          {expanded === member.id && (
+            <div style={{ marginLeft: 36, marginBottom: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {member.tasks.map(task => (
+                <div key={task.id} style={{ fontSize: 11.5, color: '#6B6560', padding: '2px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ flex: 1 }}>• {task.due_date} — {task.title ?? '(untitled)'}</span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setUpdating(task.id)
+                      try {
+                        await updateTask(task.id, { statusCategory: 'completed' })
+                        setMembers(prev => prev.map(m => ({
+                          ...m,
+                          tasks: m.tasks.filter(t => t.id !== task.id),
+                        })).filter(m => m.tasks.length > 0))
+                      } catch (error) {
+                        console.error('Failed to mark task complete:', error)
+                      } finally {
+                        setUpdating(null)
+                      }
+                    }}
+                    disabled={updating === task.id}
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      padding: '2px 6px',
+                      borderRadius: 4,
+                      border: '1px solid #FEE3DE',
+                      background: 'white',
+                      color: '#2D8653',
+                      cursor: updating === task.id ? 'not-allowed' : 'pointer',
+                      opacity: updating === task.id ? 0.5 : 1,
+                      flexShrink: 0,
+                      marginLeft: 8,
+                    }}
+                  >
+                    Done
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+      {extra > 0 && (
+        <div style={{ fontSize: 11.5, color: '#9E9488', paddingTop: 4 }}>+ {extra} more members</div>
+      )}
+    </div>
+  )
+}

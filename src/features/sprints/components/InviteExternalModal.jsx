@@ -1,0 +1,359 @@
+import { useEffect, useState } from 'react'
+import { getSprintInvitePermissions, inviteExternalToSprint } from '../lib/sprints'
+import { useToast } from '../../../context/ToastContext'
+
+const TOKENS = {
+  primary: '#4C2A92',
+  accent: '#E8A020',
+  border: '#EDE8DC',
+  background: '#F4F1EA',
+  textPrimary: '#2D2A22',
+  textSecondary: '#7A6F5E',
+  textTertiary: '#9E9488',
+  error: '#C94830',
+  errorBg: '#FFE5E5',
+}
+
+export default function InviteExternalModal({ sprintId, sprintEndDate, sprintName, teams = [], canInvite: canInviteProp = null, canAssignPrivilegedRoles: canAssignPrivilegedRolesProp = null, onClose, onSuccess }) {
+  const { showToast } = useToast()
+  const [email, setEmail] = useState('')
+  const [name, setName] = useState('')
+  const [role, setRole] = useState('contributor')
+  const [selectedTeamIds, setSelectedTeamIds] = useState([])
+  const [expiryMode, setExpiryMode] = useState('on_archive')
+  const [endDate, setEndDate] = useState(sprintEndDate ?? '')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [checkingPermission, setCheckingPermission] = useState(canInviteProp === null || canAssignPrivilegedRolesProp === null)
+  const [canInvite, setCanInvite] = useState(canInviteProp ?? false)
+  const [canAssignPrivilegedRoles, setCanAssignPrivilegedRoles] = useState(canAssignPrivilegedRolesProp ?? false)
+
+  useEffect(() => {
+    let active = true
+
+    if (canInviteProp !== null && canAssignPrivilegedRolesProp !== null) {
+      setCanInvite(Boolean(canInviteProp))
+      setCanAssignPrivilegedRoles(Boolean(canAssignPrivilegedRolesProp))
+      setCheckingPermission(false)
+      return () => { active = false }
+    }
+
+    setCheckingPermission(true)
+    getSprintInvitePermissions(sprintId)
+      .then((permissions) => {
+        if (!active) return
+        setCanInvite(permissions.canInvite)
+        setCanAssignPrivilegedRoles(permissions.canAssignPrivilegedRoles)
+        setError(permissions.canInvite ? null : 'You do not have permission to invite members to this sprint.')
+      })
+      .catch(() => {
+        if (!active) return
+        setCanInvite(false)
+        setCanAssignPrivilegedRoles(false)
+        setError('Unable to verify sprint invite permission.')
+      })
+      .finally(() => {
+        if (active) setCheckingPermission(false)
+      })
+
+    return () => { active = false }
+  }, [canAssignPrivilegedRolesProp, canInviteProp, sprintId])
+
+  useEffect(() => {
+    if (!canAssignPrivilegedRoles && ['manager', 'owner'].includes(role)) {
+      setRole('contributor')
+    }
+  }, [canAssignPrivilegedRoles, role])
+
+  const inviteDisabled = checkingPermission || !canInvite || loading || !email || (expiryMode === 'on_date' && !endDate)
+
+  const handleInvite = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      if (!canInvite) {
+        setError('You do not have permission to invite members to this sprint.')
+        return
+      }
+
+      if (['manager', 'owner'].includes(role) && !canAssignPrivilegedRoles) {
+        setError('Only the sprint owner or a super admin can assign manager or owner access.')
+        return
+      }
+
+      await inviteExternalToSprint({
+        email: email.trim(),
+        name: name.trim(),
+        sprintId,
+        sprintName,
+        role,
+        membershipEndDate: expiryMode === 'on_archive' ? null : endDate || null,
+        teamIds: selectedTeamIds,
+      })
+
+      showToast(`Invitation sent to ${email.trim()}. They'll receive a set-password email shortly.`, { tone: 'success' })
+      setEmail('')
+      setName('')
+      setRole('contributor')
+      setSelectedTeamIds([])
+      setExpiryMode('on_archive')
+      setEndDate(sprintEndDate ?? '')
+      onSuccess?.()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 50,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: 'white',
+          borderRadius: '12px',
+          padding: '24px',
+          maxWidth: '400px',
+          width: '90%',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          boxShadow: '0 20px 25px rgba(0,0,0,0.15)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 style={{ margin: '0 0 8px 0', fontSize: 20, fontWeight: 600, color: TOKENS.textPrimary }}>
+          Invite External Person
+        </h2>
+        <p style={{ margin: '0 0 20px 0', fontSize: 13, color: TOKENS.textSecondary }}>
+          Add a temporary member to <strong>{sprintName}</strong>
+        </p>
+
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: TOKENS.textPrimary }}>
+            Email (required)
+          </label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="sophia@design.studio"
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: `1px solid ${TOKENS.border}`,
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontFamily: 'DM Sans, system-ui, sans-serif',
+              boxSizing: 'border-box',
+            }}
+          />
+        </div>
+
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: TOKENS.textPrimary }}>
+            Name (optional)
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Sophia Chen"
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: `1px solid ${TOKENS.border}`,
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontFamily: 'DM Sans, system-ui, sans-serif',
+              boxSizing: 'border-box',
+            }}
+          />
+        </div>
+
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: TOKENS.textPrimary }}>
+            Role
+          </label>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              border: `1px solid ${TOKENS.border}`,
+              borderRadius: '8px',
+              fontSize: '14px',
+              fontFamily: 'DM Sans, system-ui, sans-serif',
+              boxSizing: 'border-box',
+            }}
+          >
+            <option value="contributor">Contributor</option>
+            <option value="viewer">Viewer</option>
+            {canAssignPrivilegedRoles && <option value="manager">Manager</option>}
+          </select>
+        </div>
+
+        {teams.length > 0 && (
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px', color: TOKENS.textPrimary }}>
+              Team(s) <span style={{ fontWeight: 400, color: TOKENS.textTertiary }}>(optional)</span>
+            </label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto', border: `1px solid ${TOKENS.border}`, borderRadius: 8, padding: '8px 10px' }}>
+              {teams.map((team) => (
+                <label key={team.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: TOKENS.textPrimary }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedTeamIds.includes(team.id)}
+                    onChange={(e) => {
+                      setSelectedTeamIds((prev) =>
+                        e.target.checked ? [...prev, team.id] : prev.filter((id) => id !== team.id)
+                      )
+                    }}
+                    style={{ accentColor: TOKENS.primary, width: 14, height: 14 }}
+                  />
+                  {team.name}
+                </label>
+              ))}
+            </div>
+            {selectedTeamIds.length > 0 && (
+              <div style={{ marginTop: 4, fontSize: 11, color: TOKENS.textTertiary }}>
+                {selectedTeamIds.length} team{selectedTeamIds.length !== 1 ? 's' : ''} selected. They will be added when the invitation is accepted.
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ marginBottom: '16px' }}>
+          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: TOKENS.textPrimary }}>
+            Access expires
+          </label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[
+              { value: 'on_archive', label: 'When sprint is archived', sub: 'Access is revoked automatically when the sprint closes' },
+              { value: 'on_date', label: 'On a specific date', sub: 'Choose an exact expiry date' },
+            ].map((opt) => (
+              <label
+                key={opt.value}
+                style={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 10,
+                  padding: '10px 12px',
+                  border: `1px solid ${expiryMode === opt.value ? TOKENS.primary : TOKENS.border}`,
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  background: expiryMode === opt.value ? '#f5f0ff' : 'white',
+                  transition: 'all 0.12s',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="expiryMode"
+                  value={opt.value}
+                  checked={expiryMode === opt.value}
+                  onChange={() => setExpiryMode(opt.value)}
+                  style={{ marginTop: 2, accentColor: TOKENS.primary }}
+                />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: TOKENS.textPrimary }}>{opt.label}</div>
+                  <div style={{ fontSize: 12, color: TOKENS.textTertiary, marginTop: 2 }}>{opt.sub}</div>
+                </div>
+              </label>
+            ))}
+          </div>
+          {expiryMode === 'on_date' && (
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              style={{
+                width: '100%',
+                marginTop: 8,
+                padding: '10px 12px',
+                border: `1px solid ${TOKENS.border}`,
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontFamily: 'DM Sans, system-ui, sans-serif',
+                boxSizing: 'border-box',
+              }}
+            />
+          )}
+        </div>
+
+        {error && (
+          <div
+            style={{
+              background: TOKENS.errorBg,
+              color: TOKENS.error,
+              padding: '10px 12px',
+              borderRadius: '6px',
+              marginBottom: '16px',
+              fontSize: '13px',
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        <div style={{ fontSize: '12px', color: TOKENS.textSecondary, marginBottom: '16px', lineHeight: '1.5' }}>
+          They'll receive a "Set your password" email to access the sprint. Their access is automatically revoked when the sprint is archived.
+        </div>
+
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            onClick={onClose}
+            disabled={loading}
+            style={{
+              flex: 1,
+              padding: '10px 16px',
+              border: `1px solid ${TOKENS.border}`,
+              borderRadius: '8px',
+              background: 'white',
+              color: TOKENS.textPrimary,
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontFamily: 'DM Sans, system-ui, sans-serif',
+              transition: 'all 0.12s',
+              opacity: loading ? 0.6 : 1,
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleInvite}
+            disabled={inviteDisabled}
+            style={{
+              flex: 1,
+              padding: '10px 16px',
+              borderRadius: '8px',
+              background: inviteDisabled ? `${TOKENS.primary}99` : TOKENS.primary,
+              color: 'white',
+              border: 'none',
+              fontSize: '13px',
+              fontWeight: 600,
+              cursor: inviteDisabled ? 'not-allowed' : 'pointer',
+              fontFamily: 'DM Sans, system-ui, sans-serif',
+              transition: 'all 0.12s',
+              opacity: inviteDisabled ? 0.6 : 1,
+            }}
+          >
+            {loading ? 'Inviting…' : 'Invite'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

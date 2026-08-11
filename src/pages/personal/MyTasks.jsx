@@ -1,0 +1,420 @@
+import { useEffect, useMemo, useState } from 'react'
+import { useWindowWidth } from '../../hooks/useWindowWidth'
+import { SlidersHorizontal } from 'lucide-react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import LoadingSpinner from '../../components/ui/LoadingSpinner'
+import { useToast } from '../../context/ToastContext'
+import { useAuth } from '../../hooks/useAuth'
+import { useDeptMembers } from '../../hooks/useDeptMembers'
+import { useMyTasks, useWatchedTasks } from '../../features/tasks/hooks/useMyTasks'
+import { TasksProvider } from '../../features/tasks/TasksContext'
+import { listTaskStatuses } from '../../lib/taskStatuses'
+import { getMySpaces } from '../../features/spaces'
+import TaskModal from '../../features/tasks/components/TaskModal'
+import KanbanBoard from '../../features/tasks/components/KanbanBoard'
+import TaskListView from '../../features/tasks/components/TaskListView'
+import TaskFilters from '../../features/tasks/components/TaskFilters'
+import TaskSearchInput, { filterTasksBySearch } from '../../features/tasks/components/TaskSearchInput'
+import { EMPTY_FILTERS, applyTaskFilters } from '../../features/tasks/hooks/useTaskFilters'
+import { getTaskTypeInfo } from '../../features/tasks/lib/task-types'
+import { isDelegatedTask, updateTask } from '../../features/tasks/lib/tasks'
+import { FONT_BODY, FONT_HEADING } from '../../lib/fonts'
+import { STALE_COMPLETED_TASK_DAYS } from '../../lib/taskStatuses'
+
+const MY_TASKS_DATE_CLOSED_KEY = 'blw_date_closed_filter_my_tasks'
+
+function readMyTasksDateClosedFilter() {
+  const fallback = { operator: 'is', rangeDays: STALE_COMPLETED_TASK_DAYS.PERSONAL }
+  try {
+    const stored = localStorage.getItem(MY_TASKS_DATE_CLOSED_KEY)
+    if (!stored) return fallback
+    const parsed = JSON.parse(stored)
+    return {
+      operator: parsed.operator === 'is_not' ? 'is_not' : 'is',
+      rangeDays: parsed.rangeDays === null ? null : Number(parsed.rangeDays) || fallback.rangeDays,
+    }
+  } catch {
+    return fallback
+  }
+}
+
+function loadViewMode() {
+  return localStorage.getItem('blw_mytasks_view') ?? 'list'
+}
+
+// Sidebar quick views (/my-tasks/:view) → useMyTasks scope + header copy.
+// Unknown :view values fall through to the default (unscoped) My Tasks.
+const QUICK_VIEWS = {
+  today: {
+    scope: 'today_tomorrow',
+    title: 'Today & Tomorrow',
+    subtitle: 'Assigned tasks due today or tomorrow.',
+  },
+}
+
+export default function MyTasks() {
+  const { profile, role } = useAuth()
+  const { showToast } = useToast()
+  const location = useLocation()
+  const navigate = useNavigate()
+  const { view } = useParams()
+  const quickView = QUICK_VIEWS[view] ?? null
+  const hookFilters = useMemo(
+    () => (quickView ? { scope: quickView.scope } : undefined),
+    [quickView],
+  )
+  const { tasks, isLoading, refetch, optimisticStatusUpdate } = useMyTasks(profile?.id || '', hookFilters)
+  const { tasks: watchedTasks, isLoading: watchedLoading, refetch: refetchWatched } = useWatchedTasks(profile?.id || '')
+  const [statuses, setStatuses] = useState([])
+  const [departments, setDepartments] = useState([])
+  const [modal, setModal] = useState(null)
+  const [viewMode, setViewMode] = useState(loadViewMode)
+  const [activeTab, setActiveTab] = useState('mine')
+  const [filters, setFilters] = useState(() => {
+    const { operator, rangeDays } = readMyTasksDateClosedFilter()
+    return { ...EMPTY_FILTERS, dateClosedOperator: operator, dateClosedRangeDays: rangeDays }
+  })
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [taskSearch, setTaskSearch] = useState('')
+  const isMobileView = useWindowWidth() < 640
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(MY_TASKS_DATE_CLOSED_KEY, JSON.stringify({
+        operator: filters.dateClosedOperator,
+        rangeDays: filters.dateClosedRangeDays,
+      }))
+    } catch {
+      // Ignore write failures (e.g. private browsing) — persistence is a nicety, not a requirement.
+    }
+  }, [filters.dateClosedOperator, filters.dateClosedRangeDays])
+  const deptMembers = useDeptMembers(profile?.department_id)
+
+  // My Tasks spans every space, so equivalent statuses ("To Do", "Done") exist
+  // once per department under different ids. Collapse them by name for the
+  // filter chips and expand a selected chip back to its whole name group when
+  // filtering, so a chip matches tasks from all spaces.
+  const statusGroups = useMemo(() => {
+    const idsByName = new Map()
+    const display = []
+    for (const status of statuses) {
+      const key = (status.name ?? '').trim().toLowerCase()
+      if (!idsByName.has(key)) {
+        idsByName.set(key, [])
+        display.push(status)
+      }
+      idsByName.get(key).push(status.id)
+    }
+    const idToGroup = {}
+    for (const ids of idsByName.values()) {
+      for (const id of ids) idToGroup[id] = ids
+    }
+    return { display, idToGroup }
+  }, [statuses])
+
+  // "Mine" = personal tasks + tasks assigned to me by others (assignee_id === me).
+  // "Delegated" = tasks I created for someone else — tracked separately so
+  // they don't inflate my own to-do totals.
+  const myTasks = useMemo(() => {
+    const directly = tasks.filter((t) =>
+      t.assignee_id === profile?.id ||
+      (t.assignees ?? []).some((a) => (a.user_id ?? a.id) === profile?.id),
+    )
+    // Pull in parent tasks already in the fetched set so their subtasks nest
+    // correctly in TaskListView. Without this, a parent created-by-me but
+    // not self-assigned is absent from the list, causing its subtasks to
+    // orphan-promote to top level and clutter the view.
+    const directIds = new Set(directly.map((t) => t.id))
+    const neededParentIds = new Set(
+      directly
+        .filter((t) => t.parent_task_id && !directIds.has(t.parent_task_id))
+        .map((t) => t.parent_task_id),
+    )
+    const missingParents = neededParentIds.size > 0
+      ? tasks.filter((t) => neededParentIds.has(t.id))
+      : []
+    return [...directly, ...missingParents]
+  }, [tasks, profile?.id])
+  const delegatedTasks = useMemo(() => tasks.filter((t) => isDelegatedTask(t, profile?.id)), [tasks, profile?.id])
+
+  // Don't double-count a subtask whose parent is also in my task list.
+  const myParentTaskIds = useMemo(
+    () => new Set(myTasks.filter((t) => !t.parent_task_id).map((t) => t.id)),
+    [myTasks],
+  )
+  const countableTasks = useMemo(
+    () => myTasks.filter((t) => !t.parent_task_id || !myParentTaskIds.has(t.parent_task_id)),
+    [myTasks, myParentTaskIds],
+  )
+  // Same deduplication for delegated tasks (don't count subtasks separately from parents)
+  const delegatedParentTaskIds = useMemo(
+    () => new Set(delegatedTasks.filter((t) => !t.parent_task_id).map((t) => t.id)),
+    [delegatedTasks],
+  )
+  const countableDelegatedTasks = useMemo(
+    () => delegatedTasks.filter((t) => !t.parent_task_id || !delegatedParentTaskIds.has(t.parent_task_id)),
+    [delegatedTasks, delegatedParentTaskIds],
+  )
+  // Quick views are assignee-scoped at the query level, so the Delegated/Watching tabs
+  // don't apply — pin them to "mine".
+  const effectiveTab = quickView ? 'mine' : activeTab
+  const tabTasks = effectiveTab === 'delegated' ? countableDelegatedTasks
+    : effectiveTab === 'watching' ? watchedTasks
+    : myTasks
+
+  // Apply the filter panel to whichever tab is showing. Status ids expand to
+  // their name group first (see statusGroups above).
+  const expandedFilters = filters.status.length > 0
+    ? { ...filters, status: [...new Set(filters.status.flatMap((id) => statusGroups.idToGroup[id] ?? [id]))] }
+    : filters
+  const visibleTasks = applyTaskFilters(tabTasks, expandedFilters)
+  const searchedTasks = useMemo(() => filterTasksBySearch(visibleTasks, taskSearch), [visibleTasks, taskSearch])
+
+  // Tab counts always reflect the active filters so they stay in sync with
+  // what's visible — both when the user adjusts filters and when the cron/
+  // realtime subscription updates the underlying task lists.
+  const myTasksCount = useMemo(
+    () => applyTaskFilters(countableTasks, expandedFilters).length,
+    [countableTasks, expandedFilters],
+  )
+  const delegatedCount = useMemo(
+    () => applyTaskFilters(countableDelegatedTasks, expandedFilters).length,
+    [countableDelegatedTasks, expandedFilters],
+  )
+  const watchingCount = useMemo(
+    () => applyTaskFilters(watchedTasks, expandedFilters).length,
+    [watchedTasks, expandedFilters],
+  )
+
+  async function loadMetadata() {
+    if (!profile?.id) return
+    try {
+      const [spacesData] = await Promise.all([
+        getMySpaces(profile.id, role, profile.department_id),
+      ])
+      const activeDepts = spacesData.filter((space) => space.status === 'active')
+      setDepartments(activeDepts)
+
+      // Load statuses from every department so cross-space tasks group correctly
+      const statusLists = await Promise.all(
+        activeDepts.map((d) => listTaskStatuses({ departmentId: d.id })),
+      )
+      setStatuses(statusLists.flat())
+    } catch (err) {
+      console.error('[MyTasks] Failed to load metadata:', err)
+    }
+  }
+
+  useEffect(() => {
+    loadMetadata()
+  }, [profile?.id, role])
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    if (params.get('new') === 'true') {
+      setModal({ mode: 'create' })
+      navigate(location.pathname, { replace: true })
+    }
+  }, [location.search, location.pathname, navigate])
+
+  function setView(mode) {
+    setViewMode(mode)
+    localStorage.setItem('blw_mytasks_view', mode)
+  }
+
+  function handleSaved() {
+    // useMyTasks owns the task list (with realtime sync); re-pull after a
+    // modal save rather than mutating a non-existent local setter.
+    refetch()
+    refetchWatched()
+  }
+
+  function handleDeleted() {
+    refetch()
+    refetchWatched()
+  }
+
+  // Drag-and-drop status change for both List and Board views. Delegated
+  // tasks are included on purpose — the modal stays read-only for them, but
+  // dragging lets the delegator override status without editing other
+  // fields. Realtime only re-syncs tasks assigned to me, so delegated-tab
+  // moves need an explicit refetch to show up.
+  async function handleTaskStatusChange({ taskId, newStatus }) {
+    optimisticStatusUpdate(taskId, newStatus)
+    try {
+      await updateTask(taskId, {
+        status: newStatus.legacy_key,
+        statusId: newStatus.id,
+        statusCategory: newStatus.category,
+      })
+    } catch (err) {
+      console.error('[MyTasks] Failed to update task status:', err)
+      showToast("Couldn't update that task's status. Try again.", { tone: 'error' })
+      refetch()
+    }
+  }
+
+  // Mirrors useTaskFilters.hasActiveFilters — a generic truthiness sweep
+  // misfires on EMPTY_FILTERS' showDone:true default and dateRange object.
+  const hasActiveFilters = () =>
+    filters.status.length > 0 ||
+    filters.priority.length > 0 ||
+    filters.assigneeId != null ||
+    filters.dueDateRange != null ||
+    filters.dateRange?.startDate != null ||
+    filters.dateRange?.endDate != null ||
+    filters.taskType.length > 0 ||
+    filters.source.length > 0 ||
+    filters.hasComments ||
+    filters.hasDependencies ||
+    !filters.showDone ||
+    filters.dateClosedRangeDays !== STALE_COMPLETED_TASK_DAYS.PERSONAL ||
+    (filters.dateClosedRangeDays !== null && filters.dateClosedOperator !== 'is')
+
+  function clearFilters() {
+    setFilters((prev) => ({
+      ...EMPTY_FILTERS,
+      dateClosedOperator: prev.dateClosedOperator,
+      dateClosedRangeDays: prev.dateClosedRangeDays,
+    }))
+  }
+
+  const departmentOptions = departments.map((d) => ({ id: d.id, name: d.name, color: d.color }))
+  const memberMap = Object.fromEntries(deptMembers.map((m) => [m.id, m]))
+
+  return (
+    <>
+      <div className="space-y-5" style={{ fontFamily: FONT_BODY }}>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl" style={{ fontFamily: FONT_HEADING, fontWeight: 700, letterSpacing: '-0.02em', color: 'var(--ink-1)' }}>{quickView?.title ?? 'My Tasks'}</h1>
+            <p className="mt-1 text-sm" style={{ color: 'var(--ink-2)' }}>{quickView?.subtitle ?? 'Everything assigned to you across departments and programs.'}</p>
+          </div>
+
+          <div className="flex items-center gap-1 p-[3px]" style={{ background: 'var(--surface-sub)', border: '1px solid var(--border-1)', borderRadius: 10 }}>
+            {['board', 'list'].map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setView(mode)}
+                className="px-3 py-1.5 text-sm font-medium rounded-lg transition-all"
+                style={{
+                  background: viewMode === mode ? 'var(--surface-card)' : 'transparent',
+                  color: viewMode === mode ? 'var(--purple-700)' : 'var(--ink-3)',
+                  fontWeight: viewMode === mode ? 600 : 500,
+                  boxShadow: viewMode === mode ? '0 1px 2px rgba(28,22,16,0.06)' : 'none',
+                }}
+              >
+                {mode === 'board' ? 'Board' : 'List'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+        {quickView ? <span /> : (
+        <div className="flex items-center gap-1 p-[3px]" style={{ background: 'var(--surface-sub)', border: '1px solid var(--border-1)', borderRadius: 10, width: 'fit-content' }}>
+          {[
+            { id: 'mine', label: 'My Tasks', count: myTasksCount },
+            { id: 'delegated', label: 'Delegated', count: delegatedCount },
+            { id: 'watching', label: 'Watching', count: watchingCount },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className="px-3 py-1.5 text-sm font-medium rounded-lg transition-all"
+              style={{
+                background: activeTab === tab.id ? 'var(--surface-card)' : 'transparent',
+                color: activeTab === tab.id ? 'var(--purple-700)' : 'var(--ink-3)',
+                fontWeight: activeTab === tab.id ? 600 : 500,
+                boxShadow: activeTab === tab.id ? '0 1px 2px rgba(28,22,16,0.06)' : 'none',
+              }}
+            >
+              {tab.label}{tab.count > 0 ? ` (${tab.count})` : ''}
+            </button>
+          ))}
+        </div>
+        )}
+
+          <div className="flex items-center gap-2">
+          <TaskSearchInput value={taskSearch} onChange={setTaskSearch} />
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setFiltersOpen((current) => !current)}
+              className="inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm font-medium shadow-[0_1px_2px_rgba(28,22,16,0.04)]"
+              style={{ border: '1px solid var(--border-1)', background: 'var(--surface-card)', color: 'var(--ink-1)', transition: 'border-color .13s' }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--purple-500)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-1)' }}
+            >
+              <SlidersHorizontal size={14} />
+              <span>Filter</span>
+              {hasActiveFilters() ? <span style={{ color: 'var(--purple-500)' }}>(active)</span> : null}
+            </button>
+
+            {filtersOpen ? (
+              <div className={`absolute ${isMobileView ? 'left-0' : 'right-0'} top-[calc(100%+8px)] z-20 w-[640px] max-w-[calc(100vw-32px)] max-h-[70vh] overflow-y-auto rounded-[16px] border border-[var(--border-1)] bg-white p-4 shadow-[var(--shadow-lg)]`}>
+                <TaskFilters forceExpanded filters={filters} setFilters={setFilters} clearFilters={clearFilters} hasActiveFilters={hasActiveFilters} members={[]} statuses={statusGroups.display} tasks={tabTasks} showDateClosedFilter />
+              </div>
+            ) : null}
+          </div>
+          </div>
+        </div>
+
+        {isLoading || (effectiveTab === 'watching' && watchedLoading) ? (
+          <div className="flex justify-center py-16">
+            <LoadingSpinner label="Loading tasks" />
+          </div>
+        ) : viewMode === 'board' ? (
+          <div className="min-h-[520px]">
+            <TasksProvider>
+              <KanbanBoard
+                filteredTasks={searchedTasks}
+                departmentId={null}
+                spaceName="My Tasks"
+                departments={departmentOptions}
+                statusesOverride={statuses}
+                onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: effectiveTab === 'watching' })}
+                onCreateTask={() => setModal({ mode: 'create' })}
+                onTaskStatusChange={handleTaskStatusChange}
+                canCreateTask={effectiveTab === 'mine'}
+                showSubtasks
+              />
+            </TasksProvider>
+          </div>
+        ) : (
+          <div className="min-h-[520px] rounded-[16px] border border-[var(--border-1)] bg-white p-4 shadow-[var(--card-shadow)]">
+            <TaskListView
+              tasks={searchedTasks}
+              statuses={statuses}
+              departments={departmentOptions}
+              canAddTask={effectiveTab === 'mine'}
+              onCreateTask={() => setModal({ mode: 'create' })}
+              onTaskClick={(task) => setModal({ mode: 'edit', task, isReadOnly: effectiveTab === 'watching' })}
+              onTaskStatusChange={handleTaskStatusChange}
+              people={memberMap}
+              priorities={{}}
+              teamMembers={Object.values(memberMap)}
+              showSubtaskCount
+            />
+          </div>
+        )}
+      </div>
+
+      {modal ? (
+        <TaskModal
+          mode={modal.mode}
+          task={modal.task}
+          isReadOnly={modal.isReadOnly ?? false}
+          defaultStatus={modal.defaultStatus ?? ''}
+          departmentId={modal.task?.department_id}
+          fieldSettings={{}}
+          onClose={() => setModal(null)}
+          onSaved={handleSaved}
+          onDeleted={handleDeleted}
+        />
+      ) : null}
+    </>
+  )
+}

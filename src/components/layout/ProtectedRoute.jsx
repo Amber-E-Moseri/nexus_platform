@@ -1,0 +1,78 @@
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { useAuth } from '../../hooks/useAuth'
+import { hasSpaceRole, hasGrant, isProgramsMember, SPACE_ROLES } from '../../lib/permissions.js'
+import LoadingSpinner from '../ui/LoadingSpinner'
+
+export default function ProtectedRoute({ children, roles, allowFeatureRoles, allowGrant, blockRoles, allowTemporary = false, blockTemporary = false }) {
+  const { loading, user, profile, effectiveRole, isRecoveryMode } = useAuth()
+  const location = useLocation()
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--surface-secondary)]">
+        <LoadingSpinner label="Loading your workspace" />
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace state={{ from: location }} />
+  }
+
+  // Recovery mode guard: only allow /reset-password while in recovery
+  if (isRecoveryMode && location.pathname !== '/reset-password') {
+    return <Navigate to="/reset-password" replace />
+  }
+
+  // Denylist guard: block specific roles outright (e.g. group_member from the
+  // Sprints browse list / Meetings). Applied before the roles allowlist.
+  if (blockTemporary && profile?.is_temporary) {
+    return (
+      <Navigate
+        to="/meetings/minutes"
+        replace
+        state={{ authError: 'External members can read shared minutes in Minutes Hub.' }}
+      />
+    )
+  }
+
+  if (blockRoles && blockRoles.includes(effectiveRole) && !(allowTemporary && profile?.is_temporary)) {
+    return (
+      <Navigate
+        to="/dashboard"
+        replace
+        state={{ authError: 'You do not have access to that section.' }}
+      />
+    )
+  }
+
+  if (roles && !roles.includes(effectiveRole)) {
+    // Space roles (Phase 3): 'ors'/'programs'/'media'/'dept_lead' in a route's
+    // roles array are granted via space_roles rows, never via users.role — so
+    // a roles array naming a space role passes for anyone holding it in any
+    // space. allowFeatureRoles remains as an explicit opt-in for routes whose
+    // roles array doesn't name the space role directly.
+    const spaceRolePasses = roles.some(
+      (r) => SPACE_ROLES.includes(r) && hasSpaceRole(profile, null, r)
+    )
+    // Programs department members pass if 'programs' is in the roles array
+    const programsDeptMemberPasses = roles.includes('programs') && isProgramsMember(profile)
+    const featureRolePasses = (allowFeatureRoles ?? []).some((fr) => hasSpaceRole(profile, null, fr))
+    // Ad-hoc grant (user_grants) — lets a specific user pass this route's
+    // roles check without changing their base role. See regional_secretary_
+    // access: a pastor granted regional-secretary admin reach.
+    const grantPasses = allowGrant ? hasGrant(profile, allowGrant) : false
+
+    if (!spaceRolePasses && !programsDeptMemberPasses && !featureRolePasses && !grantPasses) {
+      return (
+        <Navigate
+          to="/dashboard"
+          replace
+          state={{ authError: 'You do not have access to that section.' }}
+        />
+      )
+    }
+  }
+
+  return children ?? <Outlet />
+}

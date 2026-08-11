@@ -1,0 +1,210 @@
+import { useEffect, useState } from 'react'
+import { useAuth } from '../../hooks/useAuth'
+import { useToast } from '../../context/ToastContext'
+import { useRequirePermission } from '../../hooks/useHasPermission'
+import { supabase } from '../../lib/supabase'
+import CampusEditsTable from '../../components/admin/CampusEditsTable'
+import ApprovalModal from '../../components/admin/ApprovalModal'
+
+export default function CampusEditsPage() {
+  const { profile } = useAuth()
+  const { showToast } = useToast()
+  const { hasPermission, loading: authLoading } = useRequirePermission('campus:approve')
+  const [tab, setTab] = useState('pending') // 'pending' | 'approved' | 'rejected'
+  const [edits, setEdits] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [selectedEdit, setSelectedEdit] = useState(null)
+  const [showApprovalModal, setShowApprovalModal] = useState(false)
+  const [approvalAction, setApprovalAction] = useState(null) // 'approve' | 'reject'
+  const [submitting, setSubmitting] = useState(false)
+
+  const authorized = authLoading || hasPermission
+
+  // Fetch edits for current tab. Hooks must run on every render (BLW-13:
+  // this effect used to sit below the unauthorized early-return, which
+  // crashes React when permission state resolves after first render).
+  useEffect(() => {
+    if (!authorized) return
+    fetchEdits(tab)
+  }, [tab, authorized])
+
+  // Check authorization
+  if (!authorized) {
+    return (
+      <div
+        style={{
+          padding: '2rem',
+          textAlign: 'center',
+          color: 'var(--coral)',
+        }}
+      >
+        <h2>Unauthorized</h2>
+        <p>You don't have the 'campus:approve' permission to access this page.</p>
+      </div>
+    )
+  }
+
+  const fetchEdits = async (status) => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('campus_edits')
+        .select(
+          `
+          id, campus_id, field_name, old_value, new_value,
+          submitted_by, submitted_at, status, reviewed_by, reviewed_at, notes,
+          campuses(id, name, institution),
+          submitted_user:submitted_by(name, email),
+          reviewed_user:reviewed_by(name, email)
+        `
+        )
+        .eq('status', status)
+        .order('submitted_at', { ascending: false })
+
+      if (error) throw error
+      setEdits(data || [])
+    } catch (err) {
+      showToast(`Failed to load edits: ${err.message}`, { tone: 'error' })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleApprovalClick = (edit, action) => {
+    setSelectedEdit(edit)
+    setApprovalAction(action)
+    setShowApprovalModal(true)
+  }
+
+  const handleApprovalSubmit = async (notes) => {
+    setSubmitting(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('approve_campus_edit', {
+        body: {
+          edit_id: selectedEdit.id,
+          action: approvalAction,
+          notes: notes || null,
+        },
+      })
+
+      if (error) throw error
+
+      showToast(
+        `Edit ${approvalAction === 'approve' ? 'approved' : 'rejected'} successfully`,
+        { tone: 'success' }
+      )
+      setShowApprovalModal(false)
+      setSelectedEdit(null)
+      setApprovalAction(null)
+      fetchEdits(tab) // Refresh list
+    } catch (err) {
+      showToast(`Failed to ${approvalAction}: ${err.message}`, { tone: 'error' })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const tabButtonStyle = (isActive) => ({
+    padding: '10px 16px',
+    fontSize: 13,
+    fontWeight: isActive ? '700' : '600',
+    background: isActive ? 'var(--accent)' : 'var(--surface-secondary)',
+    color: isActive ? 'white' : 'var(--text-primary)',
+    border: 'none',
+    borderRadius: 6,
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+  })
+
+  const pendingCount = edits.length
+
+  if (authLoading) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center', color: '#999' }}>
+        <p>Loading permissions...</p>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}>
+      <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', marginBottom: '1rem' }}>
+        Campus Edit Approvals
+      </h1>
+
+      {/* Tab Buttons */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '2rem' }}>
+        <button
+          onClick={() => setTab('pending')}
+          style={tabButtonStyle(tab === 'pending')}
+          onMouseEnter={(e) => {
+            if (tab !== 'pending') e.currentTarget.style.background = 'var(--border-light)'
+          }}
+          onMouseLeave={(e) => {
+            if (tab !== 'pending') e.currentTarget.style.background = 'var(--surface-secondary)'
+          }}
+        >
+          ⏳ Pending {pendingCount > 0 && `(${pendingCount})`}
+        </button>
+        <button
+          onClick={() => setTab('approved')}
+          style={tabButtonStyle(tab === 'approved')}
+          onMouseEnter={(e) => {
+            if (tab !== 'approved') e.currentTarget.style.background = 'var(--border-light)'
+          }}
+          onMouseLeave={(e) => {
+            if (tab !== 'approved') e.currentTarget.style.background = 'var(--surface-secondary)'
+          }}
+        >
+          ✅ Approved
+        </button>
+        <button
+          onClick={() => setTab('rejected')}
+          style={tabButtonStyle(tab === 'rejected')}
+          onMouseEnter={(e) => {
+            if (tab !== 'rejected') e.currentTarget.style.background = '#e8e8e8'
+          }}
+          onMouseLeave={(e) => {
+            if (tab !== 'rejected') e.currentTarget.style.background = '#f0f0f0'
+          }}
+        >
+          ❌ Rejected
+        </button>
+      </div>
+
+      {/* Content */}
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
+          <p>Loading edits...</p>
+        </div>
+      ) : edits.length === 0 ? (
+        <div style={{ textAlign: 'center', padding: '2rem', color: '#999' }}>
+          <p>No {tab} edits at this time.</p>
+        </div>
+      ) : (
+        <CampusEditsTable
+          edits={edits}
+          status={tab}
+          onApprove={(edit) => handleApprovalClick(edit, 'approve')}
+          onReject={(edit) => handleApprovalClick(edit, 'reject')}
+        />
+      )}
+
+      {/* Approval Modal */}
+      {showApprovalModal && selectedEdit && (
+        <ApprovalModal
+          edit={selectedEdit}
+          action={approvalAction}
+          isOpen={showApprovalModal}
+          onClose={() => {
+            setShowApprovalModal(false)
+            setSelectedEdit(null)
+            setApprovalAction(null)
+          }}
+          onSubmit={handleApprovalSubmit}
+          isLoading={submitting}
+        />
+      )}
+    </div>
+  )
+}

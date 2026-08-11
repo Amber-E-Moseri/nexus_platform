@@ -1,0 +1,102 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173,
+      "autoPort": true
+    },
+    {
+      "name": "dev-alt",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5199", "--strictPort"],
+      "port": 5199
+    },
+    {
+      "name": "dev-alt2",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5217", "--strictPort"],
+      "port": 5217
+    },
+    {
+      "name": "dev-alt3",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5241", "--strictPort"],
+      "port": 5241
+    },
+    {
+      "name": "dev-alt4",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5333", "--strictPort"],
+      "port": 5333
+    },
+    {
+      "name": "dev-alt5",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5477", "--strictPort"],
+      "port": 5477
+    },
+    {
+      "name": "dev-alt6",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5511", "--strictPort"],
+      "port": 5511
+    },
+    {
+      "name": "dev-alt7",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5544", "--strictPort"],
+      "port": 5544
+    },
+    {
+      "name": "dev-alt8",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5622", "--strictPort"],
+      "port": 5622
+    },
+    {
+      "name": "dev-alt9",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5699", "--strictPort"],
+      "port": 5699
+    },
+    {
+      "name": "dev-alt10",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5788", "--strictPort"],
+      "port": 5788
+    },
+    {
+      "name": "dev-alt11",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5801", "--strictPort"],
+      "port": 5801
+    },
+    {
+      "name": "dev-alt12",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5850", "--strictPort"],
+      "port": 5850
+    },
+    {
+      "name": "dev-alt13",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5901", "--strictPort"],
+      "port": 5901
+    },
+    {
+      "name": "dev-alt14",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5955", "--strictPort"],
+      "port": 5955
+    },
+    {
+      "name": "design",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "9877", "--directory", "C:/Users/moser/Downloads"],
+      "port": 9877
+    }
+  ]
+}
