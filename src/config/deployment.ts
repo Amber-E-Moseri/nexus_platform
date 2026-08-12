@@ -8,6 +8,10 @@
  * The active config is registered at app startup via registerDeployment().
  * Only one deployment config is active at a time.
  *
+ * Deployments also define an authorization requirement map that connects
+ * semantic capabilities (can_administer_org, can_lead_team) to role sets.
+ * This lets features request capabilities rather than hardcoding role names.
+ *
  * NOT YET WIRED into Nova (src/features/nova/lib/buildSystemPrompt.ts) or the
  * dashboard (src/features/dashboard/lib/roleDefaults.ts) — that file must stay
  * import-free so the Deno nova-chat edge function can load it via a relative
@@ -16,12 +20,22 @@
  */
 
 import { type NexusRole, isNexusRole } from '@/config/roles'
+import { type AuthRequirement } from '@/config/authz-requirements'
 
 export interface DeploymentRoleConfig {
   /** Map a persisted deployment role string → canonical NexusRole, or null if invalid. */
   resolveRole(role: string): NexusRole | null
   /** Return the display label for a role string (deployment-specific title or fallback). */
   getRoleLabel(role: string): string
+  /** Map semantic authorization requirements to the canonical roles that satisfy them. */
+  requirementMap: Record<AuthRequirement, NexusRole[]>
+  /** Roles that should be blocked from accessing certain features. */
+  blockedRoles?: {
+    /** Roles that represent a lower tier of access (e.g., temporary members). */
+    group_member?: NexusRole[]
+    /** Temporary or external members. */
+    temporary_member?: NexusRole[]
+  }
 }
 
 let _config: DeploymentRoleConfig | null = null
@@ -50,4 +64,44 @@ export function resolveNexusRole(role: string): NexusRole | null {
 
 export function getRoleLabel(role: string): string {
   return _config?.getRoleLabel(role) ?? role
+}
+
+/**
+ * Check if a user's role satisfies a specific authorization requirement.
+ *
+ * Returns false if:
+ * - No deployment config is registered
+ * - Role is null or invalid
+ * - The role doesn't satisfy the requirement
+ *
+ * Example:
+ *   if (canUserSatisfy(userRole, AUTH_REQUIREMENTS.can_administer_org)) {
+ *     // show admin controls
+ *   }
+ */
+export function canUserSatisfy(
+  userRole: NexusRole | null,
+  requirement: AuthRequirement
+): boolean {
+  if (!userRole || !_config) return false
+  return _config.requirementMap[requirement]?.includes(userRole) ?? false
+}
+
+/**
+ * Check if a role belongs to a blocked category.
+ *
+ * Used to denylist certain roles from features (e.g., prevent temporary members
+ * from accessing sensitive areas).
+ *
+ * Example:
+ *   if (isBlockedRole(userRole, 'temporary_member')) {
+ *     return <Navigate to="/limited-access" />
+ *   }
+ */
+export function isBlockedRole(
+  userRole: NexusRole,
+  blockType: keyof NonNullable<DeploymentRoleConfig['blockedRoles']>
+): boolean {
+  if (!_config?.blockedRoles) return false
+  return _config.blockedRoles[blockType]?.includes(userRole) ?? false
 }
