@@ -113,22 +113,25 @@ The invite flow is token-based: invited users receive a signed link, complete th
 
 ### Steps
 
+**For the public demo environment:**
 ```bash
-# 1. Install dependencies
 npm install
+cp .env.demo.example .env.local
+# Add your Supabase ANON_KEY to .env.local (from dashboard)
+supabase db reset      # Loads all migrations + demo seed data
+npm run dev
+```
+Then follow the Demo section above to create auth users and log in.
 
-# 2. Configure environment
+**For a custom Supabase project:**
+```bash
+npm install
 cp .env.example .env.local
 # Edit .env.local — fill in VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY at minimum.
 # Optional integration keys: Google OAuth, Slack, Deepgram, Anthropic, Resend.
 
-# 3. Apply database migrations (248 migrations, ~18 months of schema history)
-supabase db push
-
-# 4. Deploy edge functions
-supabase functions deploy
-
-# 5. Start the dev server
+supabase db push           # Apply all migrations (~18 months of schema history)
+supabase functions deploy  # Deploy ~80 Deno edge functions
 npm run dev
 ```
 
@@ -136,7 +139,42 @@ Edge functions each require their own environment secrets (Resend API key, Anthr
 
 ## Demo
 
-> A live demo is not publicly hosted. Screenshots and a feature walkthrough are planned — see [`/docs/demo`](./docs/demo).
+A public demo Supabase project with seeded data is available for hands-on exploration.
+
+**Quick Start:**
+
+1. **Set up auth users** (one-time, in Supabase SQL Editor):
+   ```bash
+   # Follow: DEMO_AUTH_SETUP.md (step 1-2)
+   # Creates 14 demo users in auth schema
+   ```
+
+2. **Load demo data:**
+   ```bash
+   cp .env.demo.example .env.local
+   # Edit .env.local — add your ANON_KEY from Supabase dashboard
+   supabase db reset
+   ```
+
+3. **Run locally:**
+   ```bash
+   npm run dev
+   ```
+
+4. **Log in as any demo user:**
+   | Email | Role | Password |
+   |-------|------|----------|
+   | `maya@virtualllaunch.app` | Super Admin | `Demo123!@#` |
+   | `alex@virtualllaunch.app` | Dept Lead (Social Media) | `Demo123!@#` |
+   | `aria@virtualllaunch.app` | Dept Lead (Brand) | `Demo123!@#` |
+   | `quinn@virtualllaunch.app` | Dept Lead (Content) | `Demo123!@#` |
+   | `tori@virtualllaunch.app` | Dept Lead (Marketing) | `Demo123!@#` |
+   | `jordan@virtualllaunch.app` | Member | `Demo123!@#` |
+   | `morgan@virtualllaunch.app` | Member | `Demo123!@#` |
+
+**Demo Organization:** Virtual Launch Inc. (product launch scenario with 5 departments, cross-functional sprints, 15 tasks, 4 meetings, and realistic comments).
+
+See **[DEMO_AUTH_SETUP.md](./DEMO_AUTH_SETUP.md)** for detailed instructions and troubleshooting.
 
 ## License
 
