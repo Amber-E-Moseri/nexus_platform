@@ -176,6 +176,27 @@ A public demo Supabase project with seeded data is available for hands-on explor
 
 See **[DEMO_AUTH_SETUP.md](./DEMO_AUTH_SETUP.md)** for detailed instructions and troubleshooting.
 
+## Repository Status
+
+This repository is a **sanitized portfolio edition** of Nexus. It contains:
+
+- ✅ Complete application architecture and design patterns
+- ✅ Clean database schema showcasing RLS and multi-tenancy
+- ✅ Integration provider pattern (pluggable vendors)
+- ✅ Synthetic demonstration data and seed
+- ✅ Public engineering documentation
+
+It does **not** contain:
+
+- ❌ Production data or real user information
+- ❌ Operational history (incident logs, specific fixes)
+- ❌ Organization-specific configuration or business rules
+- ❌ Credentials, API keys, or deployment secrets
+- ❌ Vendor-specific implementations (see provider pattern)
+- ❌ Private engineering runbooks or incident reports
+
+**For recruiters**: This is a real portfolio project. The schema, code, and architecture are from the production system; operational details and configuration are maintained separately. See [SANITIZATION_CHECKLIST.md](./SANITIZATION_CHECKLIST.md) for the audit process.
+
 ## License
 
-This codebase is published for portfolio and reference purposes. All production data has been removed; the schema and application code reflect the real design decisions made for a live deployment. See [LICENSE](./LICENSE) for terms.
+This codebase is published for portfolio and reference purposes. See [LICENSE](./LICENSE) for terms.
