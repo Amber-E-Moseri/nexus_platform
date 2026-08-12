@@ -127,8 +127,22 @@ export function formatKbBlock(entries: NovaKbEntry[]): string {
  * MUST have already filtered `entries` to `status = 'active'` and this
  * role being present in `applicable_roles` — this function does not
  * re-filter, so it stays a pure formatter with no knowledge of RLS.
+ *
+ * Accepts `role: string` (not the narrower `NovaRole`) so callers can pass
+ * raw persisted values without pre-narrowing. Fails closed on any role not
+ * in NOVA_ROLES — returns an empty block array so the edge function receives
+ * no system context rather than a silent member-level fallback.
+ *
+ * Note on the import boundary: resolveNexusRole() in src/config/deployment.ts
+ * is the canonical authority for role normalisation across the app. We use
+ * the local isNovaRole() guard here instead of importing it because this file
+ * must remain side-effect-free and @/-alias-free so the Deno nova-chat edge
+ * function can load it via a relative path without Vite's module resolver.
  */
-export function buildNovaSystemBlocks(role: NovaRole, entries: NovaKbEntry[]): NovaSystemBlock[] {
+export function buildNovaSystemBlocks(role: string, entries: NovaKbEntry[]): NovaSystemBlock[] {
+  // Fail closed — unknown roles get no system context, not a silent fallback.
+  if (!isNovaRole(role)) return []
+
   const kbBlock = formatKbBlock(entries)
   const text = `${GUARDRAIL_INSTRUCTIONS}\n\n=== KNOWLEDGE BASE (role: ${role}) ===\n\n${kbBlock}`
 
@@ -145,6 +159,10 @@ export function buildNovaSystemBlocks(role: NovaRole, entries: NovaKbEntry[]): N
   ]
 }
 
+// resolveNexusRole() in src/config/deployment.ts is the canonical authority
+// for role normalisation across the app. The local NOVA_ROLES check here is
+// the Deno-safe equivalent — this file must stay import-free so the nova-chat
+// edge function can load it via a relative path.
 export function isNovaRole(value: unknown): value is NovaRole {
   return typeof value === 'string' && (NOVA_ROLES as readonly string[]).includes(value)
 }
