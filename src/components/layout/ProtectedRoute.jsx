@@ -1,9 +1,22 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { hasSpaceRole, hasGrant, isProgramsMember, SPACE_ROLES } from '../../lib/permissions.js'
+import { canUserSatisfy, isBlockedRole } from '@/config/deployment'
 import LoadingSpinner from '../ui/LoadingSpinner'
 
-export default function ProtectedRoute({ children, roles, allowFeatureRoles, allowGrant, blockRoles, allowTemporary = false, blockTemporary = false }) {
+export default function ProtectedRoute({
+  children,
+  // NEW: Semantic authorization requirements
+  requires,
+  requiresAny,
+  // OLD: Hardcoded role arrays (deprecated, maintained for compatibility)
+  roles,
+  allowFeatureRoles,
+  allowGrant,
+  blockRoles,
+  allowTemporary = false,
+  blockTemporary = false,
+}) {
   const { loading, user, profile, effectiveRole, isRecoveryMode } = useAuth()
   const location = useLocation()
 
@@ -24,8 +37,28 @@ export default function ProtectedRoute({ children, roles, allowFeatureRoles, all
     return <Navigate to="/reset-password" replace />
   }
 
-  // Denylist guard: block specific roles outright (e.g. group_member from the
-  // Sprints browse list / Meetings). Applied before the roles allowlist.
+  // NEW: Semantic authorization requirements (Phase 1 Tier 2)
+  if (requires && !canUserSatisfy(effectiveRole, requires)) {
+    return (
+      <Navigate
+        to="/dashboard"
+        replace
+        state={{ authError: 'You do not have sufficient permissions.' }}
+      />
+    )
+  }
+
+  if (requiresAny && !requiresAny.some((req) => canUserSatisfy(effectiveRole, req))) {
+    return (
+      <Navigate
+        to="/dashboard"
+        replace
+        state={{ authError: 'You do not have access to that section.' }}
+      />
+    )
+  }
+
+  // OLD: Denylist guard (deprecated, kept for backward compatibility)
   if (blockTemporary && profile?.is_temporary) {
     return (
       <Navigate
