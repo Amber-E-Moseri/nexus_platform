@@ -9,8 +9,9 @@ ALTER TABLE sprint_teams
 ALTER COLUMN sprint_id DROP NOT NULL;
 
 -- Add source_space_id to track teams created from spaces
+-- NOTE: "spaces" = public.departments (see 20260618000000_spaces.sql — "Departments ARE spaces")
 ALTER TABLE sprint_teams
-ADD COLUMN source_space_id uuid REFERENCES spaces(id) ON DELETE SET NULL;
+ADD COLUMN source_space_id uuid REFERENCES public.departments(id) ON DELETE SET NULL;
 
 -- Add is_archived for soft deletes (prefer over hard delete)
 ALTER TABLE sprint_teams
@@ -26,62 +27,10 @@ CREATE INDEX idx_sprint_teams_is_archived ON sprint_teams(is_archived);
 CREATE INDEX idx_sprint_teams_created_by ON sprint_teams(created_by);
 
 -- ============================================================================
--- Step 2: Create sprint_team_members table (new)
--- Decouples members from sprint_members, allowing cross-sprint teams
+-- Step 2: sprint_team_members — SUPERSEDED by 20260620000000_sprint_system_hardening.sql
+-- That migration defines the correct schema (sprint_id, sprint_team_id, user_id).
+-- Skipped here to avoid schema conflict on fresh-DB installs.
 -- ============================================================================
-
-CREATE TABLE sprint_team_members (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  team_id uuid NOT NULL REFERENCES sprint_teams(id) ON DELETE CASCADE,
-  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  role varchar(20),
-  joined_at timestamptz DEFAULT now(),
-  UNIQUE(team_id, user_id)
-);
-
--- Create indexes for efficient queries
-CREATE INDEX idx_sprint_team_members_team_id ON sprint_team_members(team_id);
-CREATE INDEX idx_sprint_team_members_user_id ON sprint_team_members(user_id);
-
--- ============================================================================
--- Step 3: Enable RLS on sprint_team_members table
--- ============================================================================
-
-ALTER TABLE sprint_team_members ENABLE ROW LEVEL SECURITY;
-
--- Read Policy: Users can read team members if in org
-CREATE POLICY "Users can read team members if in org" ON sprint_team_members
-  FOR SELECT
-  USING (
-    -- Allow if user is part of the organization (simplified)
-    EXISTS (
-      SELECT 1 FROM users u
-      WHERE u.id = auth.uid()
-      AND u.status = 'active'
-    )
-  );
-
--- Insert Policy: Team creators can add members
-CREATE POLICY "Team creators can add members" ON sprint_team_members
-  FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM sprint_teams st
-      WHERE st.id = team_id
-      AND st.created_by = auth.uid()
-    )
-  );
-
--- Delete Policy: Team creators can remove members
-CREATE POLICY "Team creators can remove members" ON sprint_team_members
-  FOR DELETE
-  USING (
-    EXISTS (
-      SELECT 1 FROM sprint_teams st
-      WHERE st.id = team_id
-      AND st.created_by = auth.uid()
-    )
-  );
 
 -- ============================================================================
 -- Step 4: Update RLS on sprint_teams table

@@ -52,6 +52,19 @@ where not exists (
   where is_default = true
 );
 
+-- Apply column + constraint that 20260618000003 delivers on existing DBs.
+-- On a fresh install, 20260618000003 skips its ALTERs (table didn't exist yet),
+-- so we apply them here after the table is created.
+alter table public.absence_email_log
+  add column if not exists recipient_user_id uuid references public.users(id) on delete set null;
+
+alter table public.absence_email_log
+  drop constraint if exists absence_email_log_status_check;
+
+alter table public.absence_email_log
+  add constraint absence_email_log_status_check
+  check (status in ('sent', 'failed', 'pending', 'skipped'));
+
 drop trigger if exists absence_email_templates_updated_at on public.absence_email_templates;
 create trigger absence_email_templates_updated_at
   before update on public.absence_email_templates

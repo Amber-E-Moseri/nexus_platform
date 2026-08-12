@@ -1,15 +1,21 @@
+-- NOTE: is_org_status column is added in 20260702000000_status_hierarchy_interactive_option_b.sql
+-- Use plpgsql so the column reference is validated at call time, not creation time.
+-- 20260702000000 replaces this stub with the correct implementation.
 drop function if exists public.get_space_statuses(uuid);
 create or replace function public.get_space_statuses(p_department_id uuid)
 returns setof public.task_status_definitions
-language sql
+language plpgsql
 stable
 set search_path = public
 as $$
+begin
+  return query
   select tsd.*
   from public.task_status_definitions tsd
-  where tsd.is_org_status = true
-    or tsd.department_id = p_department_id
-  order by tsd.is_org_status desc, tsd.sort_order asc, tsd.name asc;
+  where tsd.department_id = p_department_id
+     or tsd.department_id is null
+  order by tsd.sort_order asc, tsd.name asc;
+end;
 $$;
 
 grant execute on function public.get_space_statuses(uuid) to authenticated;

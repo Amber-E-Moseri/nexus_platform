@@ -10,20 +10,35 @@ CREATE EXTENSION IF NOT EXISTS pg_cron;
 
 -- Fires daily at 12:00 UTC (8:00 AM EST/EDT)
 -- Sends reminder notifications to users with tasks due tomorrow
-SELECT cron.schedule(
-  'due-date-reminders',
-  '0 12 * * *',
-  $$
-  SELECT net.http_post(
-    url := (SELECT current_setting('app.supabase_url')) || '/functions/v1/due-date-reminders',
-    headers := jsonb_build_object(
-      'Authorization', 'Bearer ' || current_setting('app.service_role_key'),
-      'Content-Type', 'application/json'
-    ),
-    body := '{}'::jsonb
-  );
-  $$
-) ON CONFLICT DO NOTHING;
+-- Note: cron.schedule returns a bigint job ID; ON CONFLICT is not valid syntax here.
+-- Use unschedule + reschedule pattern for idempotency.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    -- Remove existing job if it exists (idempotent)
+    BEGIN
+      PERFORM cron.unschedule('due-date-reminders');
+    EXCEPTION WHEN OTHERS THEN
+      NULL; -- Job didn't exist; that's fine
+    END;
+
+    PERFORM cron.schedule(
+      'due-date-reminders',
+      '0 12 * * *',
+      $cron$
+      SELECT net.http_post(
+        url := (SELECT current_setting('app.supabase_url', true)) || '/functions/v1/due-date-reminders',
+        headers := jsonb_build_object(
+          'Authorization', 'Bearer ' || current_setting('app.service_role_key', true),
+          'Content-Type', 'application/json'
+        ),
+        body := '{}'::jsonb
+      );
+      $cron$
+    );
+  END IF;
+END
+$$;
 
 -- ─── Create function to track cron job executions ──────────
 
@@ -81,6 +96,7 @@ $$;
 ALTER TABLE public.cron_job_log ENABLE ROW LEVEL SECURITY;
 
 -- Only super admins can view cron logs
+DROP POLICY IF EXISTS "cron_log_admin_view" ON public.cron_job_log;
 CREATE POLICY "cron_log_admin_view"
   ON public.cron_job_log FOR SELECT
   USING (auth.jwt() ->> 'user_role' = 'super_admin');

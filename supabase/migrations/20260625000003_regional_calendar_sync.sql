@@ -49,8 +49,9 @@ ALTER TABLE public.calendar_events
   ADD COLUMN IF NOT EXISTS is_admin_created BOOLEAN DEFAULT FALSE;
 
 -- Add indexes for regional events
+-- Note: is_active was never added to calendar_events; index on is_regional only
 CREATE INDEX IF NOT EXISTS calendar_events_is_regional_idx
-  ON public.calendar_events(is_regional, is_active);
+  ON public.calendar_events(is_regional);
 
 CREATE INDEX IF NOT EXISTS calendar_events_regional_sync_id_idx
   ON public.calendar_events(regional_sync_id);
@@ -84,14 +85,26 @@ CREATE POLICY "programs_manager_regional_sync"
   );
 
 -- Everyone can read active regional events
-CREATE POLICY "everyone_regional_events"
-  ON public.calendar_events
-  FOR SELECT
-  USING (
-    auth.role() = 'authenticated'
-    AND is_regional = TRUE
-    AND status = 'approved'
-  );
+-- Guard: status column added by 20260730000000
+DO $$
+BEGIN
+  DROP POLICY IF EXISTS "everyone_regional_events" ON public.calendar_events;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'calendar_events' AND column_name = 'status'
+  ) THEN
+    EXECUTE $p$
+      CREATE POLICY "everyone_regional_events" ON public.calendar_events FOR SELECT
+        USING (auth.role() = 'authenticated' AND is_regional = TRUE AND status = 'approved')
+    $p$;
+  ELSE
+    EXECUTE $p$
+      CREATE POLICY "everyone_regional_events" ON public.calendar_events FOR SELECT
+        USING (auth.role() = 'authenticated' AND is_regional = TRUE)
+    $p$;
+  END IF;
+END
+$$;
 
 -- Update trigger for regional_calendar_syncs
 CREATE OR REPLACE FUNCTION public.update_regional_sync_timestamp()

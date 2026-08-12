@@ -1,6 +1,8 @@
 -- System Settings table for AI processing cost controls
+-- Note: original migration referenced org_members (role='administrator')
+-- which is not in migration history. Replaced with public.current_user_role() check.
 
-CREATE TABLE system_settings (
+CREATE TABLE IF NOT EXISTS system_settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL,
   description TEXT,
@@ -8,7 +10,6 @@ CREATE TABLE system_settings (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Insert default settings
 INSERT INTO system_settings (key, value, description) VALUES
   ('ai_processing_enabled', 'true', 'Enable/disable AI transcription processing'),
   ('ai_daily_spend_limit', '0.50', 'Daily spending limit in dollars'),
@@ -18,33 +19,19 @@ INSERT INTO system_settings (key, value, description) VALUES
   ('ai_enable_notifications', 'true', 'Send cost limit notifications')
 ON CONFLICT (key) DO NOTHING;
 
--- Enable RLS
 ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY;
 
--- Only admins can view settings
+DROP POLICY IF EXISTS "admins_view_settings" ON system_settings;
 CREATE POLICY "admins_view_settings" ON system_settings
   FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM org_members
-      WHERE org_members.user_id = auth.uid()
-        AND org_members.role = 'administrator'
-    )
-  );
+  USING (public.current_user_role() IN ('super_admin', 'dept_lead'));
 
--- Only admins can update settings
+DROP POLICY IF EXISTS "admins_update_settings" ON system_settings;
 CREATE POLICY "admins_update_settings" ON system_settings
   FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM org_members
-      WHERE org_members.user_id = auth.uid()
-        AND org_members.role = 'administrator'
-    )
-  );
+  USING (public.current_user_role() = 'super_admin');
 
--- Create audit log table
-CREATE TABLE system_settings_audit (
+CREATE TABLE IF NOT EXISTS system_settings_audit (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   key TEXT NOT NULL,
   old_value TEXT,
@@ -53,7 +40,6 @@ CREATE TABLE system_settings_audit (
   changed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Audit trigger
 CREATE OR REPLACE FUNCTION log_setting_change()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -63,10 +49,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS system_settings_audit_trigger ON system_settings;
 CREATE TRIGGER system_settings_audit_trigger
 AFTER UPDATE ON system_settings
 FOR EACH ROW
 EXECUTE FUNCTION log_setting_change();
 
--- Index for audit lookups
-CREATE INDEX idx_audit_changed_at ON system_settings_audit(changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_changed_at ON system_settings_audit(changed_at DESC);

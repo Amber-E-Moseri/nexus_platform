@@ -1,21 +1,31 @@
 -- Add status field to agendas table
-ALTER TABLE public.agendas
-ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'draft'
-CHECK (status IN ('draft', 'finalized', 'archived'));
+-- Guard: agendas is created in 20260729000001_agenda_system.sql
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'agendas'
+  ) THEN RETURN; END IF;
 
--- Create index for status queries
-CREATE INDEX IF NOT EXISTS idx_agendas_status ON public.agendas(status);
+  ALTER TABLE public.agendas
+    ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'draft'
+    CHECK (status IN ('draft', 'finalized', 'archived'));
 
--- Add RLS policy: prevent editing finalized agendas
-CREATE POLICY IF NOT EXISTS "finalized_agendas_read_only"
-  ON public.agendas FOR UPDATE
-  TO authenticated
-  USING (status = 'draft' AND auth.uid() = created_by)
-  WITH CHECK (status = 'draft' AND auth.uid() = created_by);
+  CREATE INDEX IF NOT EXISTS idx_agendas_status ON public.agendas(status);
 
--- Ensure super_admin can always update
-CREATE POLICY IF NOT EXISTS "super_admin_override"
-  ON public.agendas FOR UPDATE
-  TO authenticated
-  USING ((SELECT role FROM users WHERE id = auth.uid()) = 'super_admin')
-  WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) = 'super_admin');
+  DROP POLICY IF EXISTS "finalized_agendas_read_only" ON public.agendas;
+  DROP POLICY IF EXISTS "super_admin_override" ON public.agendas;
+
+  EXECUTE $p$
+    CREATE POLICY "finalized_agendas_read_only" ON public.agendas FOR UPDATE TO authenticated
+      USING (status = 'draft' AND auth.uid() = created_by)
+      WITH CHECK (status = 'draft' AND auth.uid() = created_by)
+  $p$;
+
+  EXECUTE $p$
+    CREATE POLICY "super_admin_override" ON public.agendas FOR UPDATE TO authenticated
+      USING ((SELECT role FROM users WHERE id = auth.uid()) = 'super_admin')
+      WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) = 'super_admin')
+  $p$;
+END
+$$;

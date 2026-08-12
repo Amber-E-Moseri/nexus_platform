@@ -38,5 +38,12 @@ LANGUAGE SQL STABLE SECURITY DEFINER AS $$
     AND visible = false;
 $$;
 
+-- Apply programs team policy deferred from 20260930000003
+DROP POLICY IF EXISTS "visibility_programs_team_all" ON public.calendar_category_visibility;
+CREATE POLICY "visibility_programs_team_all"
+  ON public.calendar_category_visibility
+  USING (public.is_programs_team())
+  WITH CHECK (public.is_programs_team());
+
 COMMENT ON TABLE public.calendar_category_visibility IS
   'Controls which event categories/tags are visible per role in iCal feeds. Missing rows default to visible.';

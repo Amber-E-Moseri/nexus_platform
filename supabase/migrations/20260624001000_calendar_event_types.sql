@@ -23,14 +23,10 @@ create policy "Read active event types"
   using (active = true);
 
 -- Allow users with calendar management permission to manage event types
+-- NOTE: calendar_permissions is created in 20260625000000_calendar_system_foundation.sql.
+-- Stub policy here; 20260625000000 drops and recreates it with the full implementation.
 create policy "Manage event types"
   on public.calendar_event_types
   for all
   to authenticated
-  using (
-    exists(
-      select 1 from public.calendar_permissions
-      where calendar_permissions.user_id = auth.uid()
-      and calendar_permissions.can_manage = true
-    )
-  );
+  using (auth.jwt() ->> 'user_role' = 'super_admin');

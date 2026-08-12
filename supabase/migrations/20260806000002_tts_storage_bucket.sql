@@ -14,10 +14,10 @@ VALUES (
 )
 ON CONFLICT (id) DO NOTHING;
 
--- RLS: private bucket
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+-- RLS is already managed by Supabase on storage.objects; no ALTER TABLE needed.
 
 -- Allow authenticated users to read (needed for signed URLs to work)
+DROP POLICY IF EXISTS "tts_objects_select" ON storage.objects;
 CREATE POLICY "tts_objects_select" ON storage.objects
   FOR SELECT
   TO authenticated

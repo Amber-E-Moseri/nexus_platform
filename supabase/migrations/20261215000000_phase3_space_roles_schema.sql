@@ -37,12 +37,40 @@ create table if not exists public.role_permissions (
   unique (role, role_scope, permission_key)
 );
 
+-- Add role_scope column if missing (table pre-exists from 20260905000002 without this column)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'role_permissions' AND column_name = 'role_scope'
+  ) THEN
+    -- Add the column with a default so existing rows get a value
+    ALTER TABLE public.role_permissions
+      ADD COLUMN role_scope text not null default 'base'
+        CHECK (role_scope in ('base', 'space'));
+    -- Remove the old unique constraint on (role, permission_key) if present
+    ALTER TABLE public.role_permissions
+      DROP CONSTRAINT IF EXISTS role_permissions_role_permission_key_key;
+    -- Add the new unique constraint
+    ALTER TABLE public.role_permissions
+      ADD CONSTRAINT role_permissions_role_scope_permission_key_key
+        UNIQUE (role, role_scope, permission_key);
+  END IF;
+END
+$$;
+
+-- Drop old single-column index if present; create the two-column one
+DROP INDEX IF EXISTS public.idx_role_permissions_role;
 create index if not exists idx_role_permissions_role on public.role_permissions(role, role_scope);
 create index if not exists idx_role_permissions_permission_key on public.role_permissions(permission_key);
 create index if not exists idx_role_permissions_category on public.role_permissions(category);
 
 alter table public.role_permissions enable row level security;
 
+drop policy if exists "Users can view permissions" on public.role_permissions;
+drop policy if exists "Super admin manages all" on public.role_permissions;
+drop policy if exists "role_permissions_select_authenticated" on public.role_permissions;
+drop policy if exists "role_permissions_write_super_admin" on public.role_permissions;
 create policy "role_permissions_select_authenticated" on public.role_permissions
   for select
   using (auth.uid() is not null);
@@ -81,10 +109,12 @@ alter table public.space_roles enable row level security;
 -- a function that itself reads space_roles for a *different* user).
 -- That widening is left to the deferred RLS-swap pass once
 -- has_space_role() is live and verified against the backfilled rows.
+drop policy if exists "space_roles_select_own_or_admin" on public.space_roles;
 create policy "space_roles_select_own_or_admin" on public.space_roles
   for select
   using (user_id = auth.uid() or public.current_user_role() = 'super_admin');
 
+drop policy if exists "space_roles_write_super_admin" on public.space_roles;
 create policy "space_roles_write_super_admin" on public.space_roles
   for all
   using (public.current_user_role() = 'super_admin')
@@ -118,10 +148,12 @@ create index if not exists idx_overrides_user on public.user_permission_override
 
 alter table public.user_permission_overrides enable row level security;
 
+drop policy if exists "user_permission_overrides_select_own_or_admin" on public.user_permission_overrides;
 create policy "user_permission_overrides_select_own_or_admin" on public.user_permission_overrides
   for select
   using (user_id = auth.uid() or public.current_user_role() = 'super_admin');
 
+drop policy if exists "user_permission_overrides_write_super_admin" on public.user_permission_overrides;
 create policy "user_permission_overrides_write_super_admin" on public.user_permission_overrides
   for all
   using (public.current_user_role() = 'super_admin')

@@ -9,6 +9,8 @@
 -- ---- calendar_permissions table ------------------------------
 -- Super admin grants can_manage permission to specific users.
 -- This enables auto-approval on event submission.
+-- Note: table already created in 20260625000000 with (id, user_id, org_id, space_id, can_manage, granted_at)
+-- We add the `permission` text column here if it doesn't exist yet.
 create table if not exists public.calendar_permissions (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.users(id) on delete cascade,
@@ -18,23 +20,52 @@ create table if not exists public.calendar_permissions (
   unique(user_id, permission)
 );
 
+-- Add `permission` column if missing (table pre-exists from 20260625000000 without this column)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'calendar_permissions' AND column_name = 'permission'
+  ) THEN
+    ALTER TABLE public.calendar_permissions
+      ADD COLUMN permission TEXT NOT NULL DEFAULT 'can_manage'
+        CHECK (permission = 'can_manage');
+  END IF;
+END $$;
+
 create index if not exists calendar_permissions_user_id_idx on public.calendar_permissions(user_id);
-create index if not exists calendar_permissions_permission_idx on public.calendar_permissions(permission);
+
+-- Only create index on `permission` if the column exists
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'calendar_permissions' AND column_name = 'permission'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM pg_indexes
+    WHERE schemaname = 'public' AND tablename = 'calendar_permissions' AND indexname = 'calendar_permissions_permission_idx'
+  ) THEN
+    CREATE INDEX calendar_permissions_permission_idx ON public.calendar_permissions(permission);
+  END IF;
+END $$;
 
 alter table public.calendar_permissions enable row level security;
 
+drop policy if exists "calendar_permissions_select_super_admin" on public.calendar_permissions;
 create policy "calendar_permissions_select_super_admin"
   on public.calendar_permissions
   for select
   to authenticated
   using ((auth.jwt() ->> 'user_role') = 'super_admin');
 
+drop policy if exists "calendar_permissions_insert_super_admin" on public.calendar_permissions;
 create policy "calendar_permissions_insert_super_admin"
   on public.calendar_permissions
   for insert
   to authenticated
   with check ((auth.jwt() ->> 'user_role') = 'super_admin');
 
+drop policy if exists "calendar_permissions_delete_super_admin" on public.calendar_permissions;
 create policy "calendar_permissions_delete_super_admin"
   on public.calendar_permissions
   for delete

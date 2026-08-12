@@ -43,7 +43,9 @@ begin
     select 1 from information_schema.columns
     where table_name = 'rate_limits' and column_name = 'expires_at'
   ) then
-    execute 'create index if not exists idx_rate_limits_expires_at on public.rate_limits(expires_at) where expires_at < now()';
+    -- Note: partial index `where expires_at < now()` is invalid (now() is STABLE not IMMUTABLE).
+    -- Plain index on expires_at is sufficient for cleanup queries.
+    execute 'create index if not exists idx_rate_limits_expires_at on public.rate_limits(expires_at)';
   end if;
 end $$;
 

@@ -1,5 +1,6 @@
 -- Migration: Two-tier status hierarchy with CORRECTED canonical IDs
 -- Run this AFTER 20260702000003_status_hierarchy_reset.sql
+-- FIXED for fresh-DB installs: uses legacy_key/category matching instead of hardcoded production UUIDs
 
 BEGIN;
 
@@ -18,31 +19,49 @@ BEGIN
   END;
 END $$;
 
--- 2. Mark the 6 CORRECT org-wide statuses as canonical
--- These are the IDs from your original plan
-UPDATE public.task_status_definitions SET is_org_status = true WHERE id::text IN (
-  '257d3384-6191-458e-b7e6-5e215ff50809',  -- To Do (open)
-  '381b8982-b35b-493e-a595-4e31bb620dc9',  -- Blocked (in_progress)
-  '38816cde-f45e-4647-ba52-deb418d246d5',  -- In Progress (in_progress)
-  '5beec435-9e50-4700-9156-2042bb6072e3',  -- Review (in_progress)
-  '8335f92a-9ccb-4e1b-8e8e-841b500181b4',  -- Completed (completed)
-  '0ab29013-96ad-4734-8935-20c512b5bdc0'   -- Cancelled (cancelled)
-);
+-- 2. Mark the org-wide statuses (department_id IS NULL) as canonical
+UPDATE public.task_status_definitions
+SET is_org_status = true
+WHERE department_id IS NULL;
 
--- 3. Apply the mappings based on category + name heuristics
-UPDATE public.task_status_definitions s
+-- 3a. Map dept-specific statuses to their org parents by exact legacy_key match
+UPDATE public.task_status_definitions dept_status
 SET org_status_id = (
-  CASE
-    WHEN s.category = 'open' THEN '257d3384-6191-458e-b7e6-5e215ff50809'::uuid
-    WHEN s.category = 'completed' THEN '8335f92a-9ccb-4e1b-8e8e-841b500181b4'::uuid
-    WHEN s.category = 'cancelled' THEN '0ab29013-96ad-4734-8935-20c512b5bdc0'::uuid
-    WHEN s.category = 'in_progress' AND s.name ILIKE '%review%' THEN '5beec435-9e50-4700-9156-2042bb6072e3'::uuid
-    WHEN s.category = 'in_progress' AND s.name ILIKE '%blocked%' THEN '381b8982-b35b-493e-a595-4e31bb620dc9'::uuid
-    WHEN s.category = 'in_progress' THEN '38816cde-f45e-4647-ba52-deb418d246d5'::uuid
-    ELSE NULL
-  END
+  SELECT org.id
+  FROM public.task_status_definitions org
+  WHERE org.is_org_status = true
+    AND org.legacy_key = dept_status.legacy_key
+  LIMIT 1
 )
-WHERE is_org_status = false;
+WHERE is_org_status = false
+  AND department_id IS NOT NULL
+  AND legacy_key IS NOT NULL;
+
+-- 3b. For remaining unmapped dept statuses (no legacy_key or no exact match),
+--     map by name heuristics + category fallback
+UPDATE public.task_status_definitions dept_status
+SET org_status_id = (
+  SELECT org.id
+  FROM public.task_status_definitions org
+  WHERE org.is_org_status = true
+    AND org.legacy_key = (
+      CASE
+        WHEN dept_status.category = 'open'       THEN 'backlog'
+        WHEN dept_status.category = 'completed'  THEN 'done'
+        WHEN dept_status.category = 'cancelled'  THEN 'cancelled'
+        WHEN dept_status.category = 'in_progress'
+          AND dept_status.name ILIKE '%review%'  THEN 'review'
+        WHEN dept_status.category = 'in_progress'
+          AND dept_status.name ILIKE '%blocked%' THEN 'blocked'
+        WHEN dept_status.category = 'in_progress' THEN 'in_progress'
+        ELSE NULL
+      END
+    )
+  LIMIT 1
+)
+WHERE is_org_status = false
+  AND department_id IS NOT NULL
+  AND org_status_id IS NULL;
 
 -- 4. Verify all non-org statuses now have a mapping
 DO $$
@@ -57,7 +76,7 @@ BEGIN
   END IF;
 END $$;
 
--- 5. Drop existing constraint if present
+-- 5. Drop existing constraints if present
 ALTER TABLE public.task_status_definitions DROP CONSTRAINT IF EXISTS org_status_required_for_custom;
 ALTER TABLE public.task_status_definitions DROP CONSTRAINT IF EXISTS task_status_definitions_hierarchy_check;
 

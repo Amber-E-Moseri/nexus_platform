@@ -69,6 +69,10 @@ create table if not exists public.meeting_attendance_reports (
   absent_names      text[]      not null default '{}',
   unexpected_names  text[]      not null default '{}',
   subgroup_filter   text,
+  -- Columns added by 20260620000024/027 patches (included here for fresh-DB compatibility)
+  share_token       uuid        unique not null default gen_random_uuid(),
+  meeting_id        uuid        references public.meetings(id) on delete set null,
+  by_subgroup       jsonb       default null,
   created_by        uuid        references public.users(id) on delete set null,
   created_at        timestamptz not null default now()
 );

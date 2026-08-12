@@ -15,6 +15,15 @@
 -- - Remove org_id/space_id (callers should use users.department_id instead)
 -- - Keep created_by (audit trail, already present in some live deployments)
 
+-- Step 0: Drop objects that depend on space_id/org_id before we remove those columns.
+-- These policies/views were created by 20260625000000 and reference calendar_permissions.space_id.
+DROP POLICY IF EXISTS "programs_manager_google_sync" ON public.google_calendar_sync;
+DROP POLICY IF EXISTS "admin_manager_google_sync" ON public.google_calendar_sync;
+DROP POLICY IF EXISTS "programs_manager_events" ON public.calendar_events;
+DROP POLICY IF EXISTS "admin_manager_events" ON public.calendar_events;
+DROP POLICY IF EXISTS "programs_manager_regional_sync" ON public.regional_calendar_syncs;
+DROP VIEW IF EXISTS public.calendar_permissions_summary;
+
 -- Step 1: Ensure the table exists with the canonical schema
 -- If only one lineage exists in production, ADD the missing columns as NO OPs.
 ALTER TABLE IF EXISTS public.calendar_permissions

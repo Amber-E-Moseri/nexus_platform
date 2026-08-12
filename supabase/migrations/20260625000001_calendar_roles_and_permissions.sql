@@ -130,34 +130,26 @@ BEGIN
 END $$;
 
 -- ─── RLS Policies for calendar_subscriptions ──────────────────────
+-- Guard: calendar_subscriptions created in 20260730000000
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'calendar_subscriptions'
+  ) THEN RETURN; END IF;
 
-DROP POLICY IF EXISTS "manage_own_subscriptions" ON public.calendar_subscriptions;
-DROP POLICY IF EXISTS "view_subscription" ON public.calendar_subscriptions;
+  DROP POLICY IF EXISTS "manage_own_subscriptions" ON public.calendar_subscriptions;
+  DROP POLICY IF EXISTS "view_subscription" ON public.calendar_subscriptions;
+  DROP POLICY IF EXISTS "create_own_subscriptions" ON public.calendar_subscriptions;
+  DROP POLICY IF EXISTS "update_own_subscriptions" ON public.calendar_subscriptions;
+  DROP POLICY IF EXISTS "delete_own_subscriptions" ON public.calendar_subscriptions;
 
--- Users can create their own subscriptions
-CREATE POLICY "create_own_subscriptions"
-  ON public.calendar_subscriptions
-  FOR INSERT
-  WITH CHECK (user_id = auth.uid());
-
--- Users can view and manage their own subscriptions
-CREATE POLICY "manage_own_subscriptions"
-  ON public.calendar_subscriptions
-  FOR SELECT
-  USING (user_id = auth.uid());
-
--- Users can update their own subscriptions
-CREATE POLICY "update_own_subscriptions"
-  ON public.calendar_subscriptions
-  FOR UPDATE
-  USING (user_id = auth.uid())
-  WITH CHECK (user_id = auth.uid());
-
--- Users can delete their own subscriptions
-CREATE POLICY "delete_own_subscriptions"
-  ON public.calendar_subscriptions
-  FOR DELETE
-  USING (user_id = auth.uid());
+  EXECUTE $p$ CREATE POLICY "create_own_subscriptions" ON public.calendar_subscriptions FOR INSERT WITH CHECK (user_id = auth.uid()) $p$;
+  EXECUTE $p$ CREATE POLICY "manage_own_subscriptions" ON public.calendar_subscriptions FOR SELECT USING (user_id = auth.uid()) $p$;
+  EXECUTE $p$ CREATE POLICY "update_own_subscriptions" ON public.calendar_subscriptions FOR UPDATE USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid()) $p$;
+  EXECUTE $p$ CREATE POLICY "delete_own_subscriptions" ON public.calendar_subscriptions FOR DELETE USING (user_id = auth.uid()) $p$;
+END
+$$;
 
 -- ─── View for Calendar Permissions Summary ─────────────────────
 
@@ -208,25 +200,27 @@ GROUP BY
   u.email, gcs.connected_at;
 
 -- ─── View for Subscription Analytics ────────────────────────────
+-- Guard: calendar_subscriptions created in 20260730000000
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'calendar_subscriptions'
+  ) THEN RETURN; END IF;
 
-CREATE OR REPLACE VIEW public.subscription_analytics AS
-SELECT
-  cs.id,
-  cs.token,
-  cs.name,
-  cs.space_id,
-  d.name AS space_name,
-  u.email AS created_by_email,
-  cs.is_public,
-  cs.filter_priority,
-  cs.filter_status,
-  cs.access_count,
-  cs.last_accessed_at,
-  cs.created_at,
-  EXTRACT(DAY FROM NOW() - cs.created_at) AS days_active
-FROM public.calendar_subscriptions cs
-LEFT JOIN public.departments d ON d.id = cs.space_id
-LEFT JOIN public.users u ON u.id = cs.user_id;
+  EXECUTE $v$
+    CREATE OR REPLACE VIEW public.subscription_analytics AS
+    SELECT cs.id, cs.token, cs.name, cs.space_id,
+           d.name AS space_name, u.email AS created_by_email,
+           cs.is_public, cs.filter_priority, cs.filter_status,
+           cs.access_count, cs.last_accessed_at, cs.created_at,
+           EXTRACT(DAY FROM NOW() - cs.created_at) AS days_active
+    FROM public.calendar_subscriptions cs
+    LEFT JOIN public.departments d ON d.id = cs.space_id
+    LEFT JOIN public.users u ON u.id = cs.user_id
+  $v$;
+END
+$$;
 
 -- ─── Helper Function to Check User Role for Space ─────────────────
 
@@ -256,8 +250,15 @@ CREATE INDEX IF NOT EXISTS activity_log_calendar_idx
   ON public.activity_log(action)
   WHERE entity_type = 'calendar_event' OR entity_type = 'google_calendar_sync';
 
-CREATE INDEX IF NOT EXISTS calendar_subscriptions_user_created_idx
-  ON public.calendar_subscriptions(user_id, created_at DESC);
+-- Guard: calendar_subscriptions created in 20260730000000
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'calendar_subscriptions') THEN
+    CREATE INDEX IF NOT EXISTS calendar_subscriptions_user_created_idx
+      ON public.calendar_subscriptions(user_id, created_at DESC);
+  END IF;
+END
+$$;
 
 -- ─── Test Data & Seed Values (Optional, commented out) ───────────
 -- Uncomment after determining which users should have which roles

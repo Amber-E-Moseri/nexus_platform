@@ -88,10 +88,20 @@ $$;
 grant execute on function public.get_dashboard_presets(text) to authenticated;
 
 -- 2. Reset path: dashboard_role_defaults table -------------------------------
-insert into public.dashboard_role_defaults (role, widget_key, visible, sort_order) values
-  ('member',              'action_items', true, 2),
-  ('dept_lead',           'action_items', true, 2),
-  ('pastor',              'action_items', true, 2),
-  ('regional_secretary',  'action_items', true, 2),
-  ('super_admin',         'action_items', true, 2)
-on conflict (role, widget_key) do nothing;
+-- Guard: dashboard_role_defaults is created in 20260701000001_dashboard.sql (after this migration)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'dashboard_role_defaults'
+  ) THEN RETURN; END IF;
+
+  INSERT INTO public.dashboard_role_defaults (role, widget_key, visible, sort_order) VALUES
+    ('member',              'action_items', true, 2),
+    ('dept_lead',           'action_items', true, 2),
+    ('pastor',              'action_items', true, 2),
+    ('regional_secretary',  'action_items', true, 2),
+    ('super_admin',         'action_items', true, 2)
+  ON CONFLICT (role, widget_key) DO NOTHING;
+END
+$$;

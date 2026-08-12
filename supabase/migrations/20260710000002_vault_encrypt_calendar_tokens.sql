@@ -37,22 +37,31 @@ COMMENT ON COLUMN public.google_calendar_tokens.secret_type IS
 -- ─────────────────────────────────────────────────────────────────────────
 -- Step 2: Redesign ministry_calendar_connection table (singleton)
 -- Remove plaintext columns, add vault references
+-- Guard: created in 20261108000000_ministry_calendar_sources.sql
 -- ─────────────────────────────────────────────────────────────────────────
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'ministry_calendar_connection'
+  ) THEN RETURN; END IF;
 
-ALTER TABLE public.ministry_calendar_connection
-  DROP COLUMN IF EXISTS access_token,
-  DROP COLUMN IF EXISTS refresh_token,
-  ADD COLUMN IF NOT EXISTS access_token_vault_id uuid,
-  ADD COLUMN IF NOT EXISTS refresh_token_vault_id uuid,
-  ADD COLUMN IF NOT EXISTS secret_type text DEFAULT 'vault'
-    CHECK (secret_type IN ('vault'));
+  ALTER TABLE public.ministry_calendar_connection
+    DROP COLUMN IF EXISTS access_token,
+    DROP COLUMN IF EXISTS refresh_token,
+    ADD COLUMN IF NOT EXISTS access_token_vault_id uuid,
+    ADD COLUMN IF NOT EXISTS refresh_token_vault_id uuid,
+    ADD COLUMN IF NOT EXISTS secret_type text DEFAULT 'vault'
+      CHECK (secret_type IN ('vault'));
 
-COMMENT ON COLUMN public.ministry_calendar_connection.access_token_vault_id IS
-  'UUID reference to vault.decrypted_secrets for access token (Supabase Vault encrypted storage)';
-COMMENT ON COLUMN public.ministry_calendar_connection.refresh_token_vault_id IS
-  'UUID reference to vault.decrypted_secrets for refresh token (Supabase Vault encrypted storage)';
-COMMENT ON COLUMN public.ministry_calendar_connection.secret_type IS
-  'Always "vault" — indicates tokens are stored in Vault, not plaintext';
+  COMMENT ON COLUMN public.ministry_calendar_connection.access_token_vault_id IS
+    'UUID reference to vault.decrypted_secrets for access token (Supabase Vault encrypted storage)';
+  COMMENT ON COLUMN public.ministry_calendar_connection.refresh_token_vault_id IS
+    'UUID reference to vault.decrypted_secrets for refresh token (Supabase Vault encrypted storage)';
+  COMMENT ON COLUMN public.ministry_calendar_connection.secret_type IS
+    'Always "vault" — indicates tokens are stored in Vault, not plaintext';
+END
+$$;
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- Step 3: RPC wrapper functions for Vault access (Vault now enabled)
@@ -103,8 +112,15 @@ COMMENT ON FUNCTION public.vault_get_secret IS
 CREATE INDEX IF NOT EXISTS google_calendar_tokens_vault_idx
   ON public.google_calendar_tokens (access_token_vault_id, refresh_token_vault_id);
 
-CREATE INDEX IF NOT EXISTS ministry_calendar_connection_vault_idx
-  ON public.ministry_calendar_connection (access_token_vault_id, refresh_token_vault_id);
+-- Guard: ministry_calendar_connection created in 20261108000000
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='ministry_calendar_connection') THEN
+    CREATE INDEX IF NOT EXISTS ministry_calendar_connection_vault_idx
+      ON public.ministry_calendar_connection (access_token_vault_id, refresh_token_vault_id);
+  END IF;
+END
+$$;
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- Summary

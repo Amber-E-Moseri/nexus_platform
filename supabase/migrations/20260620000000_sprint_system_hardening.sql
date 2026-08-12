@@ -1,6 +1,11 @@
 alter table public.sprint_teams
   add column if not exists lead_user_id uuid references public.users(id) on delete set null;
 
+-- Drop old sprint_team_members if it was created by 20260619000002 with wrong schema
+-- (team_id, user_id) instead of the correct (sprint_id, sprint_team_id, user_id).
+-- Safe: on production this migration already ran correctly before 20260619000002 existed.
+drop table if exists public.sprint_team_members cascade;
+
 create table if not exists public.sprint_team_members (
   sprint_id uuid not null references public.sprints(id) on delete cascade,
   sprint_team_id uuid not null references public.sprint_teams(id) on delete cascade,

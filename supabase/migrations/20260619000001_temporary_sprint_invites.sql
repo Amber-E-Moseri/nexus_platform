@@ -2,6 +2,17 @@
 -- Temporary Sprint Invites
 -- ============================================================
 
+-- Stub: can_manage_sprint is defined in 20260620000000_sprint_system_hardening.sql.
+-- Created here so the sprint_members_write policy below can reference it.
+-- 20260620000000 replaces this with the real implementation via CREATE OR REPLACE.
+create or replace function public.can_manage_sprint(p_sprint_id uuid)
+returns boolean
+language sql
+stable
+as $$
+  select false
+$$;
+
 -- Add is_temporary flag to users table
 alter table public.users
   add column if not exists is_temporary boolean not null default false;

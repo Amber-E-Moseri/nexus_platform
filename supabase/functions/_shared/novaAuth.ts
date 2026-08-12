@@ -6,6 +6,11 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+// Canonical Nexus roles: src/config/roles.ts
+// These values are legacy DEPLOYMENT role IDs (BLW), not canonical Nexus roles.
+// The private deployment adapter maps them to canonical roles at runtime.
+// Remove after persisted Supabase user_role values are migrated (Phase 5).
+// Last synced: 2026-08-11
 export const NOVA_ROLES = ['super_admin', 'regional_secretary', 'dept_lead', 'pastor', 'member'] as const
 export type NovaRole = (typeof NOVA_ROLES)[number]
 
